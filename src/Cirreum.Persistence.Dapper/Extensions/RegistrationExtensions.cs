@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 /// <summary>
 /// Internal extension methods for registering Dapper SQL services with the DI container.
 /// </summary>
-internal static class SqlRegistrationExtensions {
+internal static class RegistrationExtensions {
 
 	/// <summary>
 	/// Registers <see cref="IDbConnectionFactory"/> as a singleton with the service collection.

@@ -1,4 +1,4 @@
-﻿namespace Microsoft.Data.SqlClient;
+﻿namespace Cirreum.Persistence;
 
 /// <summary>
 /// Extension methods for inspecting SQL Server exceptions.
@@ -20,7 +20,7 @@ public static class SqlExceptionExtensions {
 	/// </summary>
 	private const int ForeignKeyViolation = 547;
 
-	extension(SqlException ex) {
+	extension(Microsoft.Data.SqlClient.SqlException ex) {
 
 		/// <summary>
 		/// Determines whether the exception is a unique constraint or unique index violation.
