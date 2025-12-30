@@ -11,9 +11,9 @@ public sealed class DapperSqlOptions {
 	public string? ConnectionString { get; set; }
 
 	/// <summary>
-	/// Whether to use Azure AD authentication.
+	/// Whether to use Azure authentication.
 	/// </summary>
-	public bool UseAzureAdAuthentication { get; set; }
+	public bool UseAzureAuthentication { get; set; }
 
 	/// <summary>
 	/// Command timeout in seconds. Default is 30.

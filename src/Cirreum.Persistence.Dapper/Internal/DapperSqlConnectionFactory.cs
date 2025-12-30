@@ -7,7 +7,7 @@ using Microsoft.Data.SqlClient;
 using System.Data.Common;
 
 /// <summary>
-/// SQL Server connection factory with Azure AD authentication support.
+/// SQL Server connection factory with Azure authentication support.
 /// </summary>
 internal sealed class DapperSqlConnectionFactory : IDbConnectionFactory {
 
@@ -18,7 +18,7 @@ internal sealed class DapperSqlConnectionFactory : IDbConnectionFactory {
 	public DapperSqlConnectionFactory(DapperSqlOptions options) {
 		_connectionString = options.ConnectionString
 			?? throw new InvalidOperationException("ConnectionString is required.");
-		_useAzureAdAuth = options.UseAzureAdAuthentication;
+		_useAzureAdAuth = options.UseAzureAuthentication;
 		_commandTimeoutSeconds = options.CommandTimeoutSeconds;
 
 		if (_useAzureAdAuth) {

@@ -13,7 +13,7 @@ using Cirreum.ServiceProvider.Configuration;
 /// and command timeout.
 /// </para>
 /// <para>
-/// For Azure AD authentication, set <see cref="UseAzureAdAuthentication"/> to <c>true</c>.
+/// For Azure authentication, set <see cref="UseAzureAuthentication"/> to <c>true</c>.
 /// The factory will use <c>DefaultAzureCredential</c> to obtain access tokens automatically.
 /// </para>
 /// <para>
@@ -27,10 +27,10 @@ public sealed class DapperSqlInstanceSettings :
 	ServiceProviderInstanceSettings<DapperSqlHealthCheckOptions> {
 
 	/// <summary>
-	/// Whether to use Azure AD (Entra ID) authentication.
+	/// Whether to use Azure (Entra ID) authentication.
 	/// When enabled, uses DefaultAzureCredential for token-based auth.
 	/// </summary>
-	public bool UseAzureAdAuthentication { get; set; }
+	public bool UseAzureAuthentication { get; set; }
 
 	/// <summary>
 	/// Command timeout in seconds. Default is 30.

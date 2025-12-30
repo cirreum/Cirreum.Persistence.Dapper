@@ -37,7 +37,7 @@ internal static class RegistrationExtensions {
 		// Create options from settings
 		var options = new DapperSqlOptions {
 			ConnectionString = settings.ConnectionString!,
-			UseAzureAdAuthentication = settings.UseAzureAdAuthentication,
+			UseAzureAuthentication = settings.UseAzureAuthentication,
 			CommandTimeoutSeconds = settings.CommandTimeoutSeconds
 		};
 
@@ -67,7 +67,7 @@ internal static class RegistrationExtensions {
 
 		var options = new DapperSqlOptions {
 			ConnectionString = settings.ConnectionString!,
-			UseAzureAdAuthentication = settings.UseAzureAdAuthentication,
+			UseAzureAuthentication = settings.UseAzureAuthentication,
 			CommandTimeoutSeconds = settings.CommandTimeoutSeconds
 		};
 

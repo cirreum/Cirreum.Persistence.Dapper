@@ -12,48 +12,228 @@
 
 **Cirreum.Persistence.Dapper** provides a streamlined SQL Server database connection factory using Dapper. Built to integrate seamlessly with the Cirreum Foundation Framework, it offers flexible authentication options including Azure AD (Entra ID) support for modern cloud-native applications.
 
+The library includes Result-oriented extension methods for common data access patterns, including pagination, cursor-based queries, and automatic SQL constraint violation handling.
+
 ## Key Features
 
 - **Connection Factory Pattern** - Clean `IDbConnectionFactory` abstraction for SQL Server connections
-- **Azure AD Authentication** - Native support for `DefaultAzureCredential` token-based authentication
+- **Result Integration** - Extension methods that return `Result<T>` for railway-oriented programming
+- **Pagination Support** - Built-in support for offset (`PagedResult<T>`), cursor (`CursorResult<T>`), and slice (`SliceResult<T>`) pagination
+- **Constraint Handling** - Automatic conversion of SQL constraint violations to typed Result failures
+- **Azure Authentication** - Native support for `DefaultAzureCredential` token-based authentication
 - **Multi-Instance Support** - Keyed service registration for multiple database connections
 - **Health Checks** - Native ASP.NET Core health check integration with customizable queries
-- **Dapper Integration** - Leverage Dapper's performance for data access
 
 ## Quick Start
-
 ```csharp
 // Program.cs - Register with IHostApplicationBuilder
 builder.AddDapperSql("default", options => {
     options.ConnectionString = "Server=...;Database=...";
-    options.UseAzureAdAuthentication = true;
+    options.UseAzureAuthentication = true;
     options.CommandTimeoutSeconds = 60;
 });
+```
 
-// Inject and use the connection factory
-public class UserRepository
+## Query Extensions
+
+All query extensions return `Result<T>` and integrate with the Cirreum Result monad.
+
+### Single Record Queries
+```csharp
+public async Task<Result<Order>> GetOrderAsync(Guid orderId, CancellationToken ct)
 {
-    private readonly IDbConnectionFactory _connectionFactory;
-
-    public UserRepository(IDbConnectionFactory connectionFactory)
-    {
-        _connectionFactory = connectionFactory;
-    }
-
-    public async Task<User?> GetUserAsync(int id, CancellationToken ct)
-    {
-        await using var connection = await _connectionFactory.CreateConnectionAsync(ct);
-        return await connection.QuerySingleOrDefaultAsync<User>(
-            "SELECT * FROM Users WHERE Id = @Id",
-            new { Id = id });
-    }
+    await using var conn = await db.CreateConnectionAsync(ct);
+    
+    return await conn.QuerySingleAsync<Order>(
+        "SELECT * FROM Orders WHERE OrderId = @OrderId",
+        new { OrderId = orderId },
+        key: orderId,  // Used for NotFoundException if not found
+        ct);
 }
 ```
+
+### Collection Queries
+```csharp
+public async Task<Result<IReadOnlyList<Order>>> GetOrdersAsync(Guid customerId, CancellationToken ct)
+{
+    await using var conn = await db.CreateConnectionAsync(ct);
+    
+    return await conn.QueryAnyAsync<Order>(
+        "SELECT * FROM Orders WHERE CustomerId = @CustomerId",
+        new { CustomerId = customerId },
+        ct);
+}
+```
+
+## Pagination
+
+### Offset Pagination (PagedResult)
+
+Best for smaller datasets with "Page X of Y" UI requirements.
+```csharp
+public async Task<Result<PagedResult<Order>>> GetOrdersPagedAsync(
+    Guid customerId, int pageSize, int pageNumber, CancellationToken ct)
+{
+    await using var conn = await db.CreateConnectionAsync(ct);
+    var offset = (pageNumber - 1) * pageSize;
+
+    // Query 1: Get total count
+    var totalCount = await conn.ExecuteScalarAsync<int>(
+        "SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId",
+        new { CustomerId = customerId });
+
+    // Query 2: Get page data
+    return await conn.QueryPagedAsync<Order>(
+        """
+        SELECT * FROM Orders 
+        WHERE CustomerId = @CustomerId
+        ORDER BY CreatedAt DESC
+        OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY
+        """,
+        new { CustomerId = customerId, Offset = offset, PageSize = pageSize },
+        totalCount, pageSize, pageNumber, ct);
+}
+```
+
+### Cursor Pagination (CursorResult)
+
+Best for large datasets, infinite scroll, and real-time data where consistency matters.
+```csharp
+public async Task<Result<CursorResult<Order>>> GetOrdersCursorAsync(
+    Guid customerId, int pageSize, string? cursor, CancellationToken ct)
+{
+    await using var conn = await db.CreateConnectionAsync(ct);
+    var decoded = Cursor.Decode<DateTime>(cursor);
+
+    var sql = decoded is null
+        ? """
+          SELECT TOP (@PageSize) * FROM Orders
+          WHERE CustomerId = @CustomerId
+          ORDER BY CreatedAt DESC, OrderId DESC
+          """
+        : """
+          SELECT TOP (@PageSize) * FROM Orders
+          WHERE CustomerId = @CustomerId
+            AND (CreatedAt < @Column OR (CreatedAt = @Column AND OrderId < @Id))
+          ORDER BY CreatedAt DESC, OrderId DESC
+          """;
+
+    return await conn.QueryCursorAsync<Order, DateTime>(
+        sql,
+        new { CustomerId = customerId, decoded?.Column, decoded?.Id },
+        pageSize,
+        o => (o.CreatedAt, o.OrderId),  // Cursor selector
+        ct);
+}
+```
+
+### Slice Queries (SliceResult)
+
+For "preview with expand" scenarios — load an initial batch and indicate if more exist. Not for pagination.
+```csharp
+public async Task<Result<SliceResult<Order>>> GetRecentOrdersAsync(
+    Guid customerId, CancellationToken ct)
+{
+    await using var conn = await db.CreateConnectionAsync(ct);
+
+    return await conn.QuerySliceAsync<Order>(
+        """
+        SELECT TOP (@PageSize) * FROM Orders
+        WHERE CustomerId = @CustomerId
+        ORDER BY CreatedAt DESC
+        """,
+        new { CustomerId = customerId },
+        pageSize: 5,
+        ct);
+}
+```
+```razor
+@foreach (var order in slice.Items) { ... }
+
+@if (slice.HasMore) {
+    <a href="/orders">View All Orders</a>
+}
+```
+
+**Use cases:**
+- Dashboard widgets showing recent items with "View All" link
+- Preview cards with "Show More" expansion
+- Batch processing where you grab N items at a time
+
+**Not for:**
+- Paginating through results (use `PagedResult` or `CursorResult`)
+- Infinite scroll (use `CursorResult`)
+
+## Command Extensions
+
+Insert, Update, and Delete extensions automatically handle SQL constraint violations and convert them to appropriate Result failures.
+
+### Insert
+```csharp
+public async Task<Result<Guid>> CreateOrderAsync(CreateOrder command, CancellationToken ct)
+{
+    await using var conn = await db.CreateConnectionAsync(ct);
+    var orderId = Guid.CreateVersion7();
+
+    return await conn.InsertAsync(
+        """
+        INSERT INTO Orders (OrderId, CustomerId, Amount, CreatedAt)
+        VALUES (@OrderId, @CustomerId, @Amount, @CreatedAt)
+        """,
+        new { OrderId = orderId, command.CustomerId, command.Amount, CreatedAt = DateTime.UtcNow },
+        () => orderId,
+        uniqueConstraintMessage: "Order already exists",
+        foreignKeyMessage: "Customer not found",
+        ct);
+}
+```
+
+### Update
+```csharp
+public async Task<Result> UpdateOrderAsync(UpdateOrder command, CancellationToken ct)
+{
+    await using var conn = await db.CreateConnectionAsync(ct);
+
+    return await conn.UpdateAsync(
+        "UPDATE Orders SET Amount = @Amount WHERE OrderId = @OrderId",
+        new { command.OrderId, command.Amount },
+        key: command.OrderId,  // Returns NotFound if 0 rows affected
+        uniqueConstraintMessage: "Order reference already exists",
+        foreignKeyMessage: "Customer not found",
+        ct);
+}
+```
+
+### Delete
+```csharp
+public async Task<Result> DeleteOrderAsync(Guid orderId, CancellationToken ct)
+{
+    await using var conn = await db.CreateConnectionAsync(ct);
+
+    return await conn.DeleteAsync(
+        "DELETE FROM Orders WHERE OrderId = @OrderId",
+        new { OrderId = orderId },
+        key: orderId,  // Returns NotFound if 0 rows affected
+        foreignKeyMessage: "Cannot delete order, it has associated line items",
+        ct);
+}
+```
+
+### Constraint Handling Summary
+
+| Operation | Constraint | Result | HTTP |
+|-----------|------------|--------|------|
+| INSERT | Unique violation | `AlreadyExistsException` | 409 |
+| INSERT | FK violation | `BadRequestException` | 400 |
+| UPDATE | No rows affected | `NotFoundException` | 404 |
+| UPDATE | Unique violation | `AlreadyExistsException` | 409 |
+| UPDATE | FK violation | `BadRequestException` | 400 |
+| DELETE | No rows affected | `NotFoundException` | 404 |
+| DELETE | FK violation | `ConflictException` | 409 |
 
 ## Configuration
 
 ### Programmatic Configuration
-
 ```csharp
 // Simple connection string
 builder.AddDapperSql("default", "Server=localhost;Database=MyDb;Trusted_Connection=true");
@@ -61,7 +241,7 @@ builder.AddDapperSql("default", "Server=localhost;Database=MyDb;Trusted_Connecti
 // Full configuration
 builder.AddDapperSql("default", settings => {
     settings.ConnectionString = "Server=myserver.database.windows.net;Database=MyDb";
-    settings.UseAzureAdAuthentication = true;
+    settings.UseAzureAuthentication = true;
     settings.CommandTimeoutSeconds = 30;
 }, healthOptions => {
     healthOptions.Query = "SELECT 1";
@@ -70,7 +250,6 @@ builder.AddDapperSql("default", settings => {
 ```
 
 ### Multiple Database Instances
-
 ```csharp
 // Register multiple databases with keyed services
 builder.AddDapperSql("primary", "Server=primary.database.windows.net;Database=Main");
@@ -84,7 +263,6 @@ public class ReportService([FromKeyedServices("reporting")] IDbConnectionFactory
 ```
 
 ### appsettings.json Configuration
-
 ```json
 {
   "ServiceProviders": {
@@ -92,7 +270,7 @@ public class ReportService([FromKeyedServices("reporting")] IDbConnectionFactory
       "Dapper": {
         "default": {
           "Name": "MyPrimary",
-          "UseAzureAdAuthentication": true,
+          "UseAzureAuthentication": true,
           "CommandTimeoutSeconds": 30,
           "HealthOptions": {
             "Query": "SELECT 1",
@@ -107,41 +285,29 @@ public class ReportService([FromKeyedServices("reporting")] IDbConnectionFactory
 
 The `Name` property is used to resolve the connection string via `Configuration.GetConnectionString(name)`. For production, store connection strings in Azure Key Vault using the naming convention `ConnectionStrings--{Name}` (e.g., `ConnectionStrings--MyPrimary`).
 
-## Azure AD Authentication
+## Azure Authentication
 
-When `UseAzureAdAuthentication` is enabled, the connection factory uses `DefaultAzureCredential` to obtain access tokens for Azure SQL Database. This supports:
+When `UseAzureAuthentication` is enabled, the connection factory uses `DefaultAzureCredential` to obtain access tokens for Azure SQL Database. This supports:
 
 - Managed Identity (recommended for production)
 - Azure CLI credentials (for local development)
 - Visual Studio / VS Code credentials
 - Environment variables
-
 ```csharp
 builder.AddDapperSql("default", settings => {
     settings.ConnectionString = "Server=myserver.database.windows.net;Database=MyDb";
-    settings.UseAzureAdAuthentication = true;
+    settings.UseAzureAuthentication = true;
 });
 ```
 
 ## Contribution Guidelines
 
-1. **Be conservative with new abstractions**
-   The API surface must remain stable and meaningful.
-
-2. **Limit dependency expansion**
-   Only add foundational, version-stable dependencies.
-
-3. **Favor additive, non-breaking changes**
-   Breaking changes ripple through the entire ecosystem.
-
-4. **Include thorough unit tests**
-   All primitives and patterns should be independently testable.
-
-5. **Document architectural decisions**
-   Context and reasoning should be clear for future maintainers.
-
-6. **Follow .NET conventions**
-   Use established patterns from Microsoft.Extensions.* libraries.
+1. **Be conservative with new abstractions** — The API surface must remain stable and meaningful.
+2. **Limit dependency expansion** — Only add foundational, version-stable dependencies.
+3. **Favor additive, non-breaking changes** — Breaking changes ripple through the entire ecosystem.
+4. **Include thorough unit tests** — All primitives and patterns should be independently testable.
+5. **Document architectural decisions** — Context and reasoning should be clear for future maintainers.
+6. **Follow .NET conventions** — Use established patterns from Microsoft.Extensions.* libraries.
 
 ## Versioning
 
