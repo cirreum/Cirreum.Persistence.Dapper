@@ -27,6 +27,7 @@ public static class DapperQueryExtensions {
 		/// <param name="param">An object containing the parameters to be passed to the SQL query, or <see langword="null"/> if no parameters are
 		/// required.</param>
 		/// <param name="key">A key associated with the query result, used to identify or correlate the returned value.</param>
+		/// <param name="transaction">An optional transaction within which the command executes.</param>
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>A task representing the asynchronous operation. The result contains a <see cref="Result{T}"/> object with the
 		/// queried value, or a NotFound result if no row is found.</returns>
@@ -34,10 +35,12 @@ public static class DapperQueryExtensions {
 			string sql,
 			object? param,
 			object key,
+			IDbTransaction? transaction = null,
 			CancellationToken cancellationToken = default) {
 			var result = await conn.QuerySingleOrDefaultAsync<T>(new CommandDefinition(
 				sql,
 				param,
+				transaction: transaction,
 				cancellationToken: cancellationToken));
 			return Result.FromLookup(result, key);
 		}
@@ -52,6 +55,7 @@ public static class DapperQueryExtensions {
 		/// <param name="param">An object containing the parameters to be passed to the SQL query, or <see langword="null"/> if no parameters are required.</param>
 		/// <param name="key">A key associated with the query result, used to identify or correlate the returned value.</param>
 		/// <param name="mapper">A function to transform the data item to the domain model.</param>
+		/// <param name="transaction">An optional transaction within which the command executes.</param>
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>A task representing the asynchronous operation. The result contains a <see cref="Result{T}"/> object with the
 		/// mapped value, or a NotFound result if no row is found.</returns>
@@ -60,10 +64,12 @@ public static class DapperQueryExtensions {
 			object? param,
 			object key,
 			Func<TData, TModel> mapper,
+			IDbTransaction? transaction = null,
 			CancellationToken cancellationToken = default) {
 			var result = await conn.QuerySingleOrDefaultAsync<TData>(new CommandDefinition(
 				sql,
 				param,
+				transaction: transaction,
 				cancellationToken: cancellationToken));
 			if (result is null) {
 				return Result.NotFound<TModel>(key);
@@ -78,16 +84,19 @@ public static class DapperQueryExtensions {
 		/// <typeparam name="T">The type of the elements to be returned in the result list.</typeparam>
 		/// <param name="sql">The SQL query to execute against the database.</param>
 		/// <param name="param">An object containing the parameters to be passed to the SQL query, or null if no parameters are required.</param>
+		/// <param name="transaction">An optional transaction within which the command executes.</param>
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>A task that represents the asynchronous operation. The task result contains a successful Result
 		/// object wrapping a read-only list of items (which may be empty).</returns>
 		public async Task<Result<IReadOnlyList<T>>> QueryAnyAsync<T>(
 			string sql,
 			object? param,
+			IDbTransaction? transaction = null,
 			CancellationToken cancellationToken = default) {
 			var result = await conn.QueryAsync<T>(new CommandDefinition(
 				sql,
 				param,
+				transaction: transaction,
 				cancellationToken: cancellationToken));
 			return Result.From<IReadOnlyList<T>>([.. result]);
 		}
@@ -101,6 +110,7 @@ public static class DapperQueryExtensions {
 		/// <param name="sql">The SQL query to execute against the database.</param>
 		/// <param name="param">An object containing the parameters to be passed to the SQL query, or null if no parameters are required.</param>
 		/// <param name="mapper">A function to transform each data item to the domain model.</param>
+		/// <param name="transaction">An optional transaction within which the command executes.</param>
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>A task that represents the asynchronous operation. The task result contains a successful Result
 		/// object wrapping a read-only list of mapped items (which may be empty).</returns>
@@ -108,10 +118,12 @@ public static class DapperQueryExtensions {
 			string sql,
 			object? param,
 			Func<TData, TModel> mapper,
+			IDbTransaction? transaction = null,
 			CancellationToken cancellationToken = default) {
 			var result = await conn.QueryAsync<TData>(new CommandDefinition(
 				sql,
 				param,
+				transaction: transaction,
 				cancellationToken: cancellationToken));
 			return Result.From<IReadOnlyList<TModel>>([.. result.Select(mapper)]);
 		}
@@ -130,6 +142,7 @@ public static class DapperQueryExtensions {
 		/// <param name="totalCount">The total number of records matching the query criteria (before pagination).</param>
 		/// <param name="pageSize">The number of items per page.</param>
 		/// <param name="page">The current page number (1-based).</param>
+		/// <param name="transaction">An optional transaction within which the command executes.</param>
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="Result{T}"/>
 		/// wrapping a <see cref="PagedResult{T}"/> with the queried items and pagination metadata.</returns>
@@ -139,10 +152,12 @@ public static class DapperQueryExtensions {
 			int totalCount,
 			int pageSize,
 			int page,
+			IDbTransaction? transaction = null,
 			CancellationToken cancellationToken = default) {
 			var items = await conn.QueryAsync<T>(new CommandDefinition(
 				sql,
 				param,
+				transaction: transaction,
 				cancellationToken: cancellationToken));
 			return new PagedResult<T>(
 				[.. items],
@@ -164,6 +179,7 @@ public static class DapperQueryExtensions {
 		/// <param name="pageSize">The number of items per page.</param>
 		/// <param name="page">The current page number (1-based).</param>
 		/// <param name="mapper">A function to transform each data item to the domain model.</param>
+		/// <param name="transaction">An optional transaction within which the command executes.</param>
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="Result{T}"/>
 		/// wrapping a <see cref="PagedResult{T}"/> with the mapped items and pagination metadata.</returns>
@@ -174,10 +190,12 @@ public static class DapperQueryExtensions {
 			int pageSize,
 			int page,
 			Func<TData, TModel> mapper,
+			IDbTransaction? transaction = null,
 			CancellationToken cancellationToken = default) {
 			var items = await conn.QueryAsync<TData>(new CommandDefinition(
 				sql,
 				param,
+				transaction: transaction,
 				cancellationToken: cancellationToken));
 			return new PagedResult<TModel>(
 				[.. items.Select(mapper)],
@@ -246,6 +264,7 @@ public static class DapperQueryExtensions {
 		/// <param name="param">An object containing the parameters to be passed to the SQL query, or <see langword="null"/> if no parameters are required.</param>
 		/// <param name="pageSize">The maximum number of items to return per page.</param>
 		/// <param name="cursorSelector">A function that extracts the sort column value and unique identifier from an item for cursor encoding.</param>
+		/// <param name="transaction">An optional transaction within which the command executes.</param>
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="Result{T}"/>
 		/// wrapping a <see cref="CursorResult{T}"/> with the queried items and cursor metadata.</returns>
@@ -254,6 +273,7 @@ public static class DapperQueryExtensions {
 			object? param,
 			int pageSize,
 			Func<T, (TColumn Column, Guid Id)> cursorSelector,
+			IDbTransaction? transaction = null,
 			CancellationToken cancellationToken = default) {
 
 			var parameters = new DynamicParameters(param);
@@ -262,6 +282,7 @@ public static class DapperQueryExtensions {
 			var items = (await conn.QueryAsync<T>(new CommandDefinition(
 				sql,
 				parameters,
+				transaction: transaction,
 				cancellationToken: cancellationToken))).ToList();
 
 			var hasNextPage = items.Count > pageSize;
@@ -340,6 +361,7 @@ public static class DapperQueryExtensions {
 		/// <param name="pageSize">The maximum number of items to return per page.</param>
 		/// <param name="mapper">A function to transform each data item to the domain model.</param>
 		/// <param name="cursorSelector">A function that extracts the sort column value and unique identifier from a mapped item for cursor encoding.</param>
+		/// <param name="transaction">An optional transaction within which the command executes.</param>
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="Result{T}"/>
 		/// wrapping a <see cref="CursorResult{T}"/> with the mapped items and cursor metadata.</returns>
@@ -349,6 +371,7 @@ public static class DapperQueryExtensions {
 			int pageSize,
 			Func<TData, TModel> mapper,
 			Func<TModel, (TColumn Column, Guid Id)> cursorSelector,
+			IDbTransaction? transaction = null,
 			CancellationToken cancellationToken = default) {
 
 			var parameters = new DynamicParameters(param);
@@ -357,6 +380,7 @@ public static class DapperQueryExtensions {
 			var data = (await conn.QueryAsync<TData>(new CommandDefinition(
 				sql,
 				parameters,
+				transaction: transaction,
 				cancellationToken: cancellationToken))).ToList();
 
 			var hasNextPage = data.Count > pageSize;
@@ -414,6 +438,7 @@ public static class DapperQueryExtensions {
 		/// <param name="sql">The SQL query to execute. Should use <c>TOP (@PageSize)</c>.</param>
 		/// <param name="param">An object containing the parameters to be passed to the SQL query, or <see langword="null"/> if no parameters are required.</param>
 		/// <param name="pageSize">The maximum number of items to return.</param>
+		/// <param name="transaction">An optional transaction within which the command executes.</param>
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="Result{T}"/>
 		/// wrapping a <see cref="SliceResult{T}"/> with the queried items and a flag indicating if more items exist.</returns>
@@ -421,6 +446,7 @@ public static class DapperQueryExtensions {
 			string sql,
 			object? param,
 			int pageSize,
+			IDbTransaction? transaction = null,
 			CancellationToken cancellationToken = default) {
 
 			var parameters = new DynamicParameters(param);
@@ -429,6 +455,7 @@ public static class DapperQueryExtensions {
 			var items = (await conn.QueryAsync<T>(new CommandDefinition(
 				sql,
 				parameters,
+				transaction: transaction,
 				cancellationToken: cancellationToken))).ToList();
 
 			var hasMore = items.Count > pageSize;
@@ -480,6 +507,7 @@ public static class DapperQueryExtensions {
 		/// <param name="param">An object containing the parameters to be passed to the SQL query, or <see langword="null"/> if no parameters are required.</param>
 		/// <param name="pageSize">The maximum number of items to return.</param>
 		/// <param name="mapper">A function to transform each data item to the domain model.</param>
+		/// <param name="transaction">An optional transaction within which the command executes.</param>
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="Result{T}"/>
 		/// wrapping a <see cref="SliceResult{T}"/> with the mapped items and a flag indicating if more items exist.</returns>
@@ -488,6 +516,7 @@ public static class DapperQueryExtensions {
 			object? param,
 			int pageSize,
 			Func<TData, TModel> mapper,
+			IDbTransaction? transaction = null,
 			CancellationToken cancellationToken = default) {
 
 			var parameters = new DynamicParameters(param);
@@ -496,6 +525,7 @@ public static class DapperQueryExtensions {
 			var data = (await conn.QueryAsync<TData>(new CommandDefinition(
 				sql,
 				parameters,
+				transaction: transaction,
 				cancellationToken: cancellationToken))).ToList();
 
 			var hasMore = data.Count > pageSize;
@@ -541,6 +571,7 @@ public static class DapperQueryExtensions {
 		/// <param name="param">An object containing the parameters to be passed to the SQL command, or <see langword="null"/> if no parameters are required.</param>
 		/// <param name="uniqueConstraintMessage">The error message to use if a unique constraint violation occurs.</param>
 		/// <param name="foreignKeyMessage">The error message to use if a foreign key violation occurs, or <see langword="null"/> to let the exception propagate.</param>
+		/// <param name="transaction">An optional transaction within which the command executes.</param>
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>A task that represents the asynchronous operation. The task result contains a successful <see cref="Result"/>
 		/// or a failure result with an appropriate exception.</returns>
@@ -549,12 +580,14 @@ public static class DapperQueryExtensions {
 			object? param,
 			string uniqueConstraintMessage = "Record already exists",
 			string? foreignKeyMessage = "Referenced record does not exist",
+			IDbTransaction? transaction = null,
 			CancellationToken cancellationToken = default) {
 
 			try {
 				await conn.ExecuteAsync(new CommandDefinition(
 					sql,
 					param,
+					transaction: transaction,
 					cancellationToken: cancellationToken));
 
 				return Result.Success;
@@ -602,6 +635,7 @@ public static class DapperQueryExtensions {
 		/// <param name="resultSelector">A function that returns the value to include in the successful result.</param>
 		/// <param name="uniqueConstraintMessage">The error message to use if a unique constraint violation occurs.</param>
 		/// <param name="foreignKeyMessage">The error message to use if a foreign key violation occurs, or <see langword="null"/> to let the exception propagate.</param>
+		/// <param name="transaction">An optional transaction within which the command executes.</param>
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="Result{T}"/>
 		/// with the value from <paramref name="resultSelector"/> on success, or a failure result with an appropriate exception.</returns>
@@ -611,12 +645,14 @@ public static class DapperQueryExtensions {
 			Func<T> resultSelector,
 			string uniqueConstraintMessage = "Record already exists",
 			string? foreignKeyMessage = "Referenced record does not exist",
+			IDbTransaction? transaction = null,
 			CancellationToken cancellationToken = default) {
 
 			try {
 				await conn.ExecuteAsync(new CommandDefinition(
 					sql,
 					param,
+					transaction: transaction,
 					cancellationToken: cancellationToken));
 
 				return resultSelector();
@@ -663,6 +699,7 @@ public static class DapperQueryExtensions {
 		/// <param name="key">The key of the entity being updated, used in the <see cref="NotFoundException"/> if no rows are affected.</param>
 		/// <param name="uniqueConstraintMessage">The error message to use if a unique constraint violation occurs.</param>
 		/// <param name="foreignKeyMessage">The error message to use if a foreign key violation occurs, or <see langword="null"/> to let the exception propagate.</param>
+		/// <param name="transaction">An optional transaction within which the command executes.</param>
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>A task that represents the asynchronous operation. The task result contains a successful <see cref="Result"/>
 		/// if at least one row was updated, or a failure result with an appropriate exception.</returns>
@@ -672,12 +709,14 @@ public static class DapperQueryExtensions {
 			object key,
 			string uniqueConstraintMessage = "Record already exists",
 			string? foreignKeyMessage = "Referenced record does not exist",
+			IDbTransaction? transaction = null,
 			CancellationToken cancellationToken = default) {
 
 			try {
 				var rowsAffected = await conn.ExecuteAsync(new CommandDefinition(
 					sql,
 					param,
+					transaction: transaction,
 					cancellationToken: cancellationToken));
 
 				return rowsAffected > 0
@@ -729,6 +768,7 @@ public static class DapperQueryExtensions {
 		/// <param name="resultSelector">A function that returns the value to include in the successful result.</param>
 		/// <param name="uniqueConstraintMessage">The error message to use if a unique constraint violation occurs.</param>
 		/// <param name="foreignKeyMessage">The error message to use if a foreign key violation occurs, or <see langword="null"/> to let the exception propagate.</param>
+		/// <param name="transaction">An optional transaction within which the command executes.</param>
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="Result{T}"/>
 		/// with the value from <paramref name="resultSelector"/> if at least one row was updated, or a failure result with an appropriate exception.</returns>
@@ -739,12 +779,14 @@ public static class DapperQueryExtensions {
 			Func<T> resultSelector,
 			string uniqueConstraintMessage = "Record already exists",
 			string? foreignKeyMessage = "Referenced record does not exist",
+			IDbTransaction? transaction = null,
 			CancellationToken cancellationToken = default) {
 
 			try {
 				var rowsAffected = await conn.ExecuteAsync(new CommandDefinition(
 					sql,
 					param,
+					transaction: transaction,
 					cancellationToken: cancellationToken));
 
 				return rowsAffected > 0
@@ -789,6 +831,7 @@ public static class DapperQueryExtensions {
 		/// <param name="param">An object containing the parameters to be passed to the SQL command, or <see langword="null"/> if no parameters are required.</param>
 		/// <param name="key">The key of the entity being deleted, used in the <see cref="NotFoundException"/> if no rows are affected.</param>
 		/// <param name="foreignKeyMessage">The error message to use if a foreign key violation occurs.</param>
+		/// <param name="transaction">An optional transaction within which the command executes.</param>
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>A task that represents the asynchronous operation. The task result contains a successful <see cref="Result"/>
 		/// if at least one row was deleted, or a failure result with an appropriate exception.</returns>
@@ -797,12 +840,14 @@ public static class DapperQueryExtensions {
 			object? param,
 			object key,
 			string foreignKeyMessage = "Cannot delete, record is in use",
+			IDbTransaction? transaction = null,
 			CancellationToken cancellationToken = default) {
 
 			try {
 				var rowsAffected = await conn.ExecuteAsync(new CommandDefinition(
 					sql,
 					param,
+					transaction: transaction,
 					cancellationToken: cancellationToken));
 
 				return rowsAffected > 0
@@ -810,6 +855,106 @@ public static class DapperQueryExtensions {
 					: Result.Fail(new NotFoundException(key));
 			} catch (SqlException ex) when (ex.IsForeignKeyViolation()) {
 				return Result.Fail(new ConflictException(foreignKeyMessage));
+			}
+		}
+
+
+		/// <summary>
+		/// Executes an operation within a database transaction, automatically committing on success
+		/// or rolling back on failure.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The transaction is committed if the result is successful, or rolled back if the result
+		/// is a failure or an exception is thrown.
+		/// </para>
+		/// <para>
+		/// <strong>Usage Pattern:</strong>
+		/// </para>
+		/// <code>
+		/// return await conn.ExecuteInTransactionAsync((tx, ct) =&gt;
+		///     conn.InsertAsync(sql1, param1, tx, ct)
+		///         .ThenAsyncTask(() =&gt; conn.InsertAsync(sql2, param2, tx, ct))
+		///         .ThenAsyncTask(() =&gt; conn.UpdateAsync(sql3, param3, tx, key, ct))
+		/// , cancellationToken);
+		/// </code>
+		/// </remarks>
+		/// <param name="action">A function that receives the transaction and cancellation token, and returns a <see cref="Result"/>.</param>
+		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
+		/// <returns>The result of the operation. The transaction is committed on success, rolled back on failure.</returns>
+		public async Task<Result> ExecuteInTransactionAsync(
+			Func<IDbTransaction, CancellationToken, Task<Result>> action,
+			CancellationToken cancellationToken = default) {
+
+			using var transaction = conn.BeginTransaction();
+
+			try {
+				var result = await action(transaction, cancellationToken).ConfigureAwait(false);
+
+				if (result.IsSuccess) {
+					transaction.Commit();
+				} else {
+					transaction.Rollback();
+				}
+
+				return result;
+			} catch (SqlException ex) {
+				transaction.Rollback();
+				return ex.ToResult();
+			} catch (Exception ex) {
+				transaction.Rollback();
+				return Result.Fail(ex);
+			}
+		}
+
+		/// <summary>
+		/// Executes an operation within a database transaction, automatically committing on success
+		/// or rolling back on failure.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The transaction is committed if the result is successful, or rolled back if the result
+		/// is a failure or an exception is thrown.
+		/// </para>
+		/// <para>
+		/// <strong>Usage Pattern:</strong>
+		/// </para>
+		/// <code>
+		/// var orderId = Guid.CreateVersion7();
+		/// var orderParam = new { OrderId = orderId, command.CustomerId, command.Amount };
+		/// return await conn.ExecuteInTransactionAsync((tx, ct) =&gt;
+		///     conn.InsertAsync(orderSql, orderParam, tx, ct)
+		///         .ThenAsyncTask(() =&gt; conn.InsertAsync(paymentSql, paymentParam, tx, ct))
+		///         .MapAsyncTask(() =&gt; orderId)
+		/// , cancellationToken);
+		/// </code>
+		/// </remarks>
+		/// <typeparam name="T">The type of the value returned on success.</typeparam>
+		/// <param name="action">A function that receives the transaction and cancellation token, and returns a <see cref="Result{T}"/>.</param>
+		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
+		/// <returns>The result of the operation. The transaction is committed on success, rolled back on failure.</returns>
+		public async Task<Result<T>> ExecuteInTransactionAsync<T>(
+			Func<IDbTransaction, CancellationToken, Task<Result<T>>> action,
+			CancellationToken cancellationToken = default) {
+
+			using var transaction = conn.BeginTransaction();
+
+			try {
+				var result = await action(transaction, cancellationToken).ConfigureAwait(false);
+
+				if (result.IsSuccess) {
+					transaction.Commit();
+				} else {
+					transaction.Rollback();
+				}
+
+				return result;
+			} catch (SqlException ex) {
+				transaction.Rollback();
+				return ex.ToResult<T>();
+			} catch (Exception ex) {
+				transaction.Rollback();
+				return Result.Fail<T>(ex);
 			}
 		}
 
