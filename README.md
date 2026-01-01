@@ -129,7 +129,7 @@ public async Task<Result<CursorResult<Order>>> GetOrdersCursorAsync(
 
 ### Slice Queries (SliceResult)
 
-For "preview with expand" scenarios — load an initial batch and indicate if more exist. Not for pagination.
+For "preview with expand" scenarios ï¿½ load an initial batch and indicate if more exist. Not for pagination.
 ```csharp
 public async Task<Result<SliceResult<Order>>> GetRecentOrdersAsync(
     Guid customerId, CancellationToken ct)
@@ -231,6 +231,98 @@ public async Task<Result> DeleteOrderAsync(Guid orderId, CancellationToken ct)
 | DELETE | No rows affected | `NotFoundException` | 404 |
 | DELETE | FK violation | `ConflictException` | 409 |
 
+## Fluent Transaction Chaining
+
+Chain multiple database operations in a single transaction with railway-oriented error handling. If any operation fails, subsequent operations are skipped and the error propagates.
+
+### Basic Chaining
+```csharp
+public async Task<Result<OrderDto>> CreateOrderWithItemsAsync(
+    CreateOrder command, CancellationToken ct)
+{
+    await using var conn = await db.CreateConnectionAsync(ct);
+
+    return await conn.ExecuteInTransactionAsync(db =>
+        db.GetAsync<CustomerDto>(
+            "SELECT * FROM Customers WHERE CustomerId = @Id",
+            new { Id = command.CustomerId },
+            key: command.CustomerId)
+        .ThenInsertAsync(
+            "INSERT INTO Orders (OrderId, CustomerId, CreatedAt) VALUES (@OrderId, @CustomerId, @CreatedAt)",
+            customer => new { OrderId = command.OrderId, customer.CustomerId, CreatedAt = DateTime.UtcNow })
+        .ThenGetAsync<OrderDto>(
+            "SELECT * FROM Orders WHERE OrderId = @Id",
+            new { Id = command.OrderId },
+            key: command.OrderId)
+    , ct);
+}
+```
+
+### Available Chain Methods
+
+**From `DbResult<T>` (typed result):**
+- `MapAsync(Func<T, TResult>)` - Transform the value
+- `WhereAsync(Func<T, bool>, Exception)` - Filter with predicate
+- `ThenAsync(Func<T, Task<Result>>)` - Execute side effect, return non-generic
+- `ThenAsync(Func<T, Task<Result<TResult>>>)` - Execute and transform
+- `ThenGetAsync<TResult>(...)` - Query single record
+- `ThenGetScalarAsync<TResult>(...)` - Query scalar value
+- `ThenInsertAsync(...)` - Insert with optional result selector
+- `ThenUpdateAsync(...)` - Update with optional result selector
+- `ThenDeleteAsync(...)` - Delete record
+
+**From `DbResultNonGeneric` (void result):**
+- `ThenAsync(Func<Task<Result>>)` - Chain another non-generic operation
+- `ThenAsync(Func<Task<Result<TResult>>>)` - Chain and produce typed result
+- `ThenGetAsync<TResult>(...)` - Query single record
+- `ThenGetScalarAsync<TResult>(...)` - Query scalar value
+- `ThenInsertAsync(...)` - Insert with optional result selector
+- `ThenUpdateAsync(...)` - Update with optional result selector
+- `ThenDeleteAsync(...)` - Delete record
+
+### Using Previous Values
+
+Insert, Update, and Delete methods provide overloads that access the previous result value:
+
+```csharp
+// Use customer data to build order parameters
+.ThenInsertAsync(
+    "INSERT INTO Orders (OrderId, CustomerId, Tier) VALUES (@OrderId, @CustomerId, @Tier)",
+    customer => new { OrderId = orderId, customer.CustomerId, customer.Tier })
+```
+
+### Returning Values from Mutations
+
+Use result selectors to return values from Insert/Update operations:
+
+```csharp
+var orderId = Guid.CreateVersion7();
+
+return await conn.ExecuteInTransactionAsync(db =>
+    db.InsertAsync(
+        "INSERT INTO Orders (...) VALUES (...)",
+        new { OrderId = orderId, ... },
+        () => orderId)  // Returns the new order ID
+    .ThenGetAsync<OrderDto>(
+        "SELECT * FROM Orders WHERE OrderId = @Id",
+        new { Id = orderId },
+        key: orderId)
+, ct);
+```
+
+### Error Short-Circuiting
+
+Failures propagate without executing subsequent operations:
+
+```csharp
+await conn.ExecuteInTransactionAsync(db =>
+    db.GetAsync<CustomerDto>(...)          // Returns NotFound
+    .ThenInsertAsync(...)                  // Skipped
+    .ThenUpdateAsync(...)                  // Skipped
+    .ThenGetAsync<OrderDto>(...)           // Skipped - returns original NotFound
+, ct);
+```
+
 ## Configuration
 
 ### Programmatic Configuration
@@ -302,12 +394,12 @@ builder.AddDapperSql("default", settings => {
 
 ## Contribution Guidelines
 
-1. **Be conservative with new abstractions** — The API surface must remain stable and meaningful.
-2. **Limit dependency expansion** — Only add foundational, version-stable dependencies.
-3. **Favor additive, non-breaking changes** — Breaking changes ripple through the entire ecosystem.
-4. **Include thorough unit tests** — All primitives and patterns should be independently testable.
-5. **Document architectural decisions** — Context and reasoning should be clear for future maintainers.
-6. **Follow .NET conventions** — Use established patterns from Microsoft.Extensions.* libraries.
+1. **Be conservative with new abstractions** ï¿½ The API surface must remain stable and meaningful.
+2. **Limit dependency expansion** ï¿½ Only add foundational, version-stable dependencies.
+3. **Favor additive, non-breaking changes** ï¿½ Breaking changes ripple through the entire ecosystem.
+4. **Include thorough unit tests** ï¿½ All primitives and patterns should be independently testable.
+5. **Document architectural decisions** ï¿½ Context and reasoning should be clear for future maintainers.
+6. **Follow .NET conventions** ï¿½ Use established patterns from Microsoft.Extensions.* libraries.
 
 ## Versioning
 
