@@ -25,14 +25,14 @@ public sealed class DbResultTests {
 	}
 
 	[TestMethod]
-	public async Task DbResult_WhenFailure_PropagatesErrorThroughWhereAsync() {
+	public async Task DbResult_WhenFailure_PropagatesErrorThroughEnsureAsync() {
 		// Arrange
 		var error = new BadRequestException("Bad request");
 		var failedResult = Task.FromResult(Result.Fail<string>(error));
 		var dbResult = new DbResult<string>(default, failedResult);
 
 		// Act
-		var filtered = dbResult.WhereAsync(x => x.Length > 5, new NotFoundException("Should not see this"));
+		var filtered = dbResult.EnsureAsync(x => x.Length > 5, new NotFoundException("Should not see this"));
 		var result = await filtered;
 
 		// Assert
@@ -75,16 +75,16 @@ public sealed class DbResultTests {
 
 	#endregion
 
-	#region WhereAsync
+	#region EnsureAsync
 
 	[TestMethod]
-	public async Task DbResult_WhereAsync_WhenPredicateTrue_ReturnsSuccess() {
+	public async Task DbResult_EnsureAsync_WhenPredicateTrue_ReturnsSuccess() {
 		// Arrange
 		var successResult = Task.FromResult(Result.From("Hello"));
 		var dbResult = new DbResult<string>(default, successResult);
 
 		// Act
-		var filtered = dbResult.WhereAsync(x => x.Length == 5, new BadRequestException("Wrong length"));
+		var filtered = dbResult.EnsureAsync(x => x.Length == 5, new BadRequestException("Wrong length"));
 		var result = await filtered;
 
 		// Assert
@@ -93,14 +93,14 @@ public sealed class DbResultTests {
 	}
 
 	[TestMethod]
-	public async Task DbResult_WhereAsync_WhenPredicateFalse_ReturnsProvidedError() {
+	public async Task DbResult_EnsureAsync_WhenPredicateFalse_ReturnsProvidedError() {
 		// Arrange
 		var successResult = Task.FromResult(Result.From("Hi"));
 		var dbResult = new DbResult<string>(default, successResult);
 		var expectedError = new BadRequestException("Wrong length");
 
 		// Act
-		var filtered = dbResult.WhereAsync(x => x.Length == 5, expectedError);
+		var filtered = dbResult.EnsureAsync(x => x.Length == 5, expectedError);
 		var result = await filtered;
 
 		// Assert
@@ -109,13 +109,13 @@ public sealed class DbResultTests {
 	}
 
 	[TestMethod]
-	public async Task DbResult_WhereAsync_WithAsyncPredicate_WhenTrue_ReturnsSuccess() {
+	public async Task DbResult_EnsureAsync_WithAsyncPredicate_WhenTrue_ReturnsSuccess() {
 		// Arrange
 		var successResult = Task.FromResult(Result.From(10));
 		var dbResult = new DbResult<int>(default, successResult);
 
 		// Act
-		var filtered = dbResult.WhereAsync(
+		var filtered = dbResult.EnsureAsync(
 			async x => {
 				await Task.Delay(1, this.TestContext.CancellationToken);
 				return x > 5;
@@ -129,14 +129,14 @@ public sealed class DbResultTests {
 	}
 
 	[TestMethod]
-	public async Task DbResult_WhereAsync_WithAsyncPredicate_WhenFalse_ReturnsError() {
+	public async Task DbResult_EnsureAsync_WithAsyncPredicate_WhenFalse_ReturnsError() {
 		// Arrange
 		var successResult = Task.FromResult(Result.From(3));
 		var dbResult = new DbResult<int>(default, successResult);
 		var expectedError = new BadRequestException("Too small");
 
 		// Act
-		var filtered = dbResult.WhereAsync(
+		var filtered = dbResult.EnsureAsync(
 			async x => {
 				await Task.Delay(1, this.TestContext.CancellationToken);
 				return x > 5;
@@ -187,7 +187,7 @@ public sealed class DbResultTests {
 	#region Chaining Multiple Operations
 
 	[TestMethod]
-	public async Task DbResult_ChainingMapAndWhere_Success() {
+	public async Task DbResult_ChainingMapAndEnsure_Success() {
 		// Arrange
 		var successResult = Task.FromResult(Result.From(10));
 		var dbResult = new DbResult<int>(default, successResult);
@@ -195,7 +195,7 @@ public sealed class DbResultTests {
 		// Act
 		var result = await dbResult
 			.MapAsync(x => x * 2)
-			.WhereAsync(x => x > 15, new BadRequestException("Too small"))
+			.EnsureAsync(x => x > 15, new BadRequestException("Too small"))
 			.MapAsync(x => $"Value: {x}");
 
 		// Assert
@@ -204,7 +204,7 @@ public sealed class DbResultTests {
 	}
 
 	[TestMethod]
-	public async Task DbResult_ChainingMapAndWhere_FailsAtWhere() {
+	public async Task DbResult_ChainingMapAndEnsure_FailsAtEnsure() {
 		// Arrange
 		var successResult = Task.FromResult(Result.From(5));
 		var dbResult = new DbResult<int>(default, successResult);
@@ -213,7 +213,7 @@ public sealed class DbResultTests {
 		// Act
 		var result = await dbResult
 			.MapAsync(x => x * 2)  // 5 * 2 = 10
-			.WhereAsync(x => x > 15, expectedError) // 10 > 15 is false
+			.EnsureAsync(x => x > 15, expectedError) // 10 > 15 is false
 			.MapAsync(x => $"Value: {x}"); // should not execute
 
 		// Assert
@@ -236,7 +236,7 @@ public sealed class DbResultTests {
 				mapperCalled = true;
 				return x * 2;
 			})
-			.WhereAsync(x => {
+			.EnsureAsync(x => {
 				predicateCalled = true;
 				return x > 15;
 			}, new BadRequestException("Too small"))

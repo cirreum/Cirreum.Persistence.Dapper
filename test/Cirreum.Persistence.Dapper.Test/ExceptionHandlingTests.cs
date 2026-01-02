@@ -144,13 +144,13 @@ public sealed class ExceptionHandlingTests {
 		CreateTestSchema(conn);
 		var userId = Guid.NewGuid().ToString();
 
-		// Act - Insert then where predicate throws
+		// Act - Insert then ensure predicate throws
 		var result = await conn.ExecuteTransactionAsync<UserDto>(ctx =>
 			ctx.InsertAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" },
 				() => new UserDto(userId, "John", "john@test.com"))
-			.WhereAsync(
+			.EnsureAsync(
 				_ => {
 					static bool ThrowingPredicate() => throw new ArithmeticException("Cannot evaluate predicate!");
 					return ThrowingPredicate();

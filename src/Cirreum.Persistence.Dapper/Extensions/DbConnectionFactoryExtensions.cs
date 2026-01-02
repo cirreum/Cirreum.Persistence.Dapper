@@ -112,7 +112,6 @@ public static class DbConnectionFactoryExtensions {
 
 		#endregion
 
-
 		#region GET
 
 		/// <summary>

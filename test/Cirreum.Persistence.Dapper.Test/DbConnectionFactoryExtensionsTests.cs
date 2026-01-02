@@ -168,13 +168,13 @@ public sealed class DbConnectionFactoryExtensionsTests {
 		// Arrange
 		var userId = Guid.NewGuid().ToString();
 
-		// Act - Insert then fail on a where clause
+		// Act - Insert then fail on an ensure clause
 		var result = await this._factory.ExecuteTransactionAsync<UserDto>(ctx =>
 			ctx.InsertAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "Invalid", Email = "invalid@test.com" },
 				() => new UserDto(userId, "Invalid", "invalid@test.com"))
-			.WhereAsync(u => u.Name.StartsWith("Valid"), new BadRequestException("Must be valid"))
+			.EnsureAsync(u => u.Name.StartsWith("Valid"), new BadRequestException("Must be valid"))
 		, this.TestContext.CancellationToken);
 
 		// Assert
@@ -628,7 +628,7 @@ public sealed class DbConnectionFactoryExtensionsTests {
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				id => new { Id = orderId, UserId = id, Amount = 50.0 },
 				() => new OrderDto(orderId, userId, 50.0))
-			.WhereAsync(
+			.EnsureAsync(
 				order => order.Amount >= 100.0,
 				new BadRequestException("Order amount must be at least 100"))
 			.ThenGetAsync<OrderDto>(
@@ -637,7 +637,7 @@ public sealed class DbConnectionFactoryExtensionsTests {
 				orderId)
 		, this.TestContext.CancellationToken);
 
-		// Assert - The chain should have failed at WhereAsync
+		// Assert - The chain should have failed at EnsureAsync
 		Assert.IsTrue(result.IsFailure);
 		Assert.IsInstanceOfType<BadRequestException>(result.Error);
 		Assert.AreEqual("Order amount must be at least 100", result.Error.Message);

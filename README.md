@@ -268,15 +268,15 @@ public async Task<Result<OrderDto>> CreateOrderWithItemsAsync(
 
 **From `DbResult<T>` (typed result):**
 - `MapAsync(Func<T, TResult>)` - Transform the value
-- `WhereAsync(Func<T, bool>, Exception)` - Filter with predicate
+- `EnsureAsync(Func<T, bool>, Exception)` - Validate with predicate
 - `ThenAsync(Func<T, Task<Result>>)` - Execute side effect, return non-generic
 - `ThenAsync(Func<T, Task<Result<TResult>>>)` - Execute and transform
 - `ThenGetAsync<TResult>(...)` - Query single record
 - `ThenGetScalarAsync<TResult>(...)` - Query scalar value
 - `ThenQueryAnyAsync<TResult>(...)` - Query collection
-- `ThenInsertAsync(...)` - Insert with optional result selector
-- `ThenUpdateAsync(...)` - Update with optional result selector
-- `ThenDeleteAsync(...)` - Delete record
+- `ThenInsertAsync(..., when?)` - Insert with optional `when` predicate
+- `ThenUpdateAsync(..., when?)` - Update with optional `when` predicate
+- `ThenDeleteAsync(..., when?)` - Delete with optional `when` predicate
 
 **From `DbResult` (void result):**
 - `ThenAsync(Func<Task<Result>>)` - Chain another non-generic operation
@@ -316,6 +316,38 @@ return await conn.ExecuteTransactionAsync(ctx =>
         new { Id = orderId },
         key: orderId)
 , ct);
+```
+
+### Conditional Operations
+
+The `when:` parameter on mutation methods (`ThenInsertAsync`, `ThenUpdateAsync`, `ThenDeleteAsync`) allows conditional execution based on the current value. If the predicate returns `false`, the operation is skipped and the chain continues:
+
+```csharp
+return await conn.ExecuteTransactionAsync(ctx =>
+    ctx.GetAsync<CustomerDto>(
+        "SELECT * FROM Customers WHERE CustomerId = @Id",
+        new { Id = customerId },
+        customerId)
+    .ThenInsertAsync(
+        "INSERT INTO AuditLog (CustomerId, Action, CreatedAt) VALUES (@CustomerId, @Action, @CreatedAt)",
+        c => new { c.CustomerId, Action = "Accessed", CreatedAt = DateTime.UtcNow },
+        when: c => c.TrackActivity)  // Only insert audit log if tracking is enabled
+    .ThenUpdateAsync(
+        "UPDATE Customers SET LastAccessedAt = @LastAccessedAt WHERE CustomerId = @CustomerId",
+        c => new { c.CustomerId, LastAccessedAt = DateTime.UtcNow },
+        customerId,
+        when: c => c.IsActive)  // Only update if customer is active
+, ct);
+```
+
+For generic methods that return a value, use a result selector to preserve the chain type:
+
+```csharp
+.ThenInsertAsync(
+    "INSERT INTO Orders (...) VALUES (...)",
+    user => new { OrderId = orderId, user.Id, ... },
+    () => user,  // Return user to preserve type for next operation
+    when: user => user.CanCreateOrders)
 ```
 
 ### Error Short-Circuiting
@@ -387,7 +419,7 @@ public class OrderRepository(IDbConnectionFactory db)
                 "SELECT * FROM Customers WHERE CustomerId = @Id",
                 new { Id = cmd.CustomerId },
                 cmd.CustomerId)
-            .WhereAsync(
+            .EnsureAsync(
                 c => c.IsActive,
                 new BadRequestException("Customer is not active"))
             .ThenInsertAsync(
