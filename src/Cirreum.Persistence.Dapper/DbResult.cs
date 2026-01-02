@@ -114,7 +114,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 		string? foreignKeyMessage) {
 		var result = await resultTask.ConfigureAwait(false);
 		if (result.IsFailure) {
-			return result.Error!;
+			return result.Error;
 		}
 		return await builder.InsertAsync(sql, resultSelector, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
 	}
@@ -127,7 +127,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 		string? foreignKeyMessage) {
 		var result = await resultTask.ConfigureAwait(false);
 		if (result.IsFailure) {
-			return result.Error!;
+			return result.Error;
 		}
 		return await builder.InsertAsync(sql, parameters, resultSelector, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
 	}
@@ -181,7 +181,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 		string? foreignKeyMessage) {
 		var result = await resultTask.ConfigureAwait(false);
 		if (result.IsFailure) {
-			return result.Error!;
+			return result.Error;
 		}
 		return await builder.UpdateAsync(sql, parameters, key, resultSelector, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
 	}
@@ -243,7 +243,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 	private async Task<Result<TResult>> ThenGetAsyncCore<TResult>(string sql, object? parameters, object key) {
 		var result = await resultTask.ConfigureAwait(false);
 		if (result.IsFailure) {
-			return result.Error!;
+			return result.Error;
 		}
 
 		return await builder.GetAsync<TResult>(sql, parameters, key).Result.ConfigureAwait(false);
@@ -252,7 +252,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 	private async Task<Result<TModel>> ThenGetAsyncCore<TData, TModel>(string sql, object? parameters, object key, Func<TData, TModel> mapper) {
 		var result = await resultTask.ConfigureAwait(false);
 		if (result.IsFailure) {
-			return result.Error!;
+			return result.Error;
 		}
 
 		return await builder.GetAsync(sql, parameters, key, mapper).Result.ConfigureAwait(false);
@@ -289,7 +289,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 	private async Task<Result<TResult>> ThenGetScalarAsyncCore<TResult>(string sql, object? parameters) {
 		var result = await resultTask.ConfigureAwait(false);
 		if (result.IsFailure) {
-			return result.Error!;
+			return result.Error;
 		}
 
 		return await builder.GetScalarAsync<TResult>(sql, parameters).Result.ConfigureAwait(false);
@@ -298,7 +298,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 	private async Task<Result<TModel>> ThenGetScalarAsyncCore<TData, TModel>(string sql, object? parameters, Func<TData?, TModel> mapper) {
 		var result = await resultTask.ConfigureAwait(false);
 		if (result.IsFailure) {
-			return result.Error!;
+			return result.Error;
 		}
 
 		return await builder.GetScalarAsync(sql, parameters, mapper).Result.ConfigureAwait(false);
@@ -335,7 +335,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 	private async Task<Result<IReadOnlyList<TResult>>> ThenQueryAnyAsyncCore<TResult>(string sql, object? parameters) {
 		var result = await resultTask.ConfigureAwait(false);
 		if (result.IsFailure) {
-			return result.Error!;
+			return result.Error;
 		}
 
 		return await builder.QueryAnyAsync<TResult>(sql, parameters).Result.ConfigureAwait(false);
@@ -344,7 +344,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 	private async Task<Result<IReadOnlyList<TModel>>> ThenQueryAnyAsyncCore<TData, TModel>(string sql, object? parameters, Func<TData, TModel> mapper) {
 		var result = await resultTask.ConfigureAwait(false);
 		if (result.IsFailure) {
-			return result.Error!;
+			return result.Error;
 		}
 
 		return await builder.QueryAnyAsync(sql, parameters, mapper).Result.ConfigureAwait(false);
