@@ -1,6 +1,7 @@
 ﻿namespace Cirreum.Persistence;
 
 using Cirreum.Exceptions;
+using Microsoft.Data.SqlClient;
 using System;
 using System.Data;
 
@@ -32,7 +33,13 @@ public static class DbConnectionFactoryExtensions {
 			Func<IDbConnection, Task<Result>> action,
 			CancellationToken cancellationToken = default) {
 			await using var connection = await factory.CreateConnectionAsync(cancellationToken);
-			return await action(connection);
+			try {
+				return await action(connection);
+			} catch (SqlException ex) {
+				return ex.ToResult();
+			} catch (Exception ex) {
+				return Result.Fail(ex);
+			}
 		}
 
 		/// <summary>
@@ -52,7 +59,13 @@ public static class DbConnectionFactoryExtensions {
 			Func<IDbConnection, Task<Result<T>>> action,
 			CancellationToken cancellationToken = default) {
 			await using var connection = await factory.CreateConnectionAsync(cancellationToken);
-			return await action(connection);
+			try {
+				return await action(connection);
+			} catch (SqlException ex) {
+				return ex.ToResult<T>();
+			} catch (Exception ex) {
+				return Result.Fail<T>(ex);
+			}
 		}
 
 		#endregion
