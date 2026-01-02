@@ -49,7 +49,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 	/// </summary>
 	/// <param name="next">The async operation to execute.</param>
 	public DbResult ThenAsync(Func<Task<Result>> next)
-		=> new(builder, ThenAsyncCore(next));
+		=> new(builder, this.ThenAsyncCore(next));
 
 	/// <summary>
 	/// Chains an arbitrary async operation that returns a Result&lt;T&gt;.
@@ -57,7 +57,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 	/// </summary>
 	/// <param name="next">The async operation to execute.</param>
 	public DbResult<T> ThenAsync<T>(Func<Task<Result<T>>> next)
-		=> new(builder, ThenAsyncCore(next));
+		=> new(builder, this.ThenAsyncCore(next));
 
 	private async Task<Result> ThenAsyncCore(Func<Task<Result>> next) {
 		var result = await resultTask.ConfigureAwait(false);

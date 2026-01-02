@@ -269,24 +269,32 @@ public async Task<Result<OrderDto>> CreateOrderWithItemsAsync(
 **From `DbResult<T>` (typed result):**
 - `MapAsync(Func<T, TResult>)` - Transform the value
 - `EnsureAsync(Func<T, bool>, Exception)` - Validate with predicate
-- `ThenAsync(Func<T, Task<Result>>)` - Execute side effect, return non-generic
-- `ThenAsync(Func<T, Task<Result<TResult>>>)` - Execute and transform
+- `ThenAsync(Func<T, Task<Result>>)` - Escape hatch for external async operations
+- `ThenAsync<TResult>(Func<T, Task<Result<TResult>>>)` - Escape hatch that transforms to new type
 - `ThenGetAsync<TResult>(...)` - Query single record
 - `ThenGetScalarAsync<TResult>(...)` - Query scalar value
 - `ThenQueryAnyAsync<TResult>(...)` - Query collection
-- `ThenInsertAsync(..., when?)` - Insert with optional `when` predicate
-- `ThenUpdateAsync(..., when?)` - Update with optional `when` predicate
-- `ThenDeleteAsync(..., when?)` - Delete with optional `when` predicate
+- `ThenInsertAsync(...)` - Insert, returns `DbResult` or `DbResult<TResult>` with result selector
+- `ThenUpdateAsync(...)` - Update, returns `DbResult` or `DbResult<TResult>` with result selector
+- `ThenDeleteAsync(...)` - Delete, returns `DbResult`
+- `ThenInsertIfAsync(..., when)` - Conditional insert (see below)
+- `ThenUpdateIfAsync(..., when)` - Conditional update (see below)
+- `ThenDeleteIfAsync(..., when)` - Conditional delete (see below)
 
 **From `DbResult` (void result):**
-- `ThenAsync(Func<Task<Result>>)` - Chain another non-generic operation
-- `ThenAsync(Func<Task<Result<TResult>>>)` - Chain and produce typed result
+- `ThenAsync(Func<Task<Result>>)` - Escape hatch for external async operations
+- `ThenAsync<T>(Func<Task<Result<T>>>)` - Escape hatch that produces typed result
 - `ThenGetAsync<TResult>(...)` - Query single record
 - `ThenGetScalarAsync<TResult>(...)` - Query scalar value
 - `ThenQueryAnyAsync<TResult>(...)` - Query collection
-- `ThenInsertAsync(...)` - Insert with optional result selector
-- `ThenUpdateAsync(...)` - Update with optional result selector
-- `ThenDeleteAsync(...)` - Delete record
+- `ThenInsertAsync(...)` - Insert, returns `DbResult`
+- `ThenInsertAsync<T>(..., resultSelector)` - Insert, returns `DbResult<T>`
+- `ThenUpdateAsync(...)` - Update, returns `DbResult`
+- `ThenUpdateAsync<T>(..., resultSelector)` - Update, returns `DbResult<T>`
+- `ThenDeleteAsync(...)` - Delete, returns `DbResult`
+- `ThenInsertIfAsync(..., when)` - Conditional insert (see below)
+- `ThenUpdateIfAsync(..., when)` - Conditional update (see below)
+- `ThenDeleteIfAsync(..., when)` - Conditional delete (see below)
 
 ### Using Previous Values
 
@@ -320,7 +328,9 @@ return await conn.ExecuteTransactionAsync(ctx =>
 
 ### Conditional Operations
 
-The `when:` parameter on mutation methods (`ThenInsertAsync`, `ThenUpdateAsync`, `ThenDeleteAsync`) allows conditional execution based on the current value. If the predicate returns `false`, the operation is skipped and the chain continues with the current value (pass-through):
+The `ThenInsertIfAsync`, `ThenUpdateIfAsync`, and `ThenDeleteIfAsync` methods allow conditional execution. If the `when` predicate returns `false`, the operation is skipped and the chain continues.
+
+**From `DbResult<T>`** - The predicate receives the current value:
 
 ```csharp
 return await conn.ExecuteTransactionAsync(ctx =>
@@ -328,19 +338,113 @@ return await conn.ExecuteTransactionAsync(ctx =>
         "SELECT * FROM Customers WHERE CustomerId = @Id",
         new { Id = customerId },
         customerId)
-    .ThenInsertAsync(
-        "INSERT INTO AuditLog (CustomerId, Action, CreatedAt) VALUES (@CustomerId, @Action, @CreatedAt)",
-        c => new { c.CustomerId, Action = "Accessed", CreatedAt = DateTime.UtcNow },
-        when: c => c.TrackActivity)  // Only insert audit log if tracking is enabled; customer passes through
-    .ThenUpdateAsync(
-        "UPDATE Customers SET LastAccessedAt = @LastAccessedAt WHERE CustomerId = @CustomerId",
-        c => new { c.CustomerId, LastAccessedAt = DateTime.UtcNow },
+    .ThenInsertIfAsync(
+        "INSERT INTO AuditLog (CustomerId, Action) VALUES (@CustomerId, @Action)",
+        c => new { c.CustomerId, Action = "Accessed" },
+        when: c => c.TrackActivity)  // Only insert if tracking enabled; CustomerDto passes through
+    .ThenUpdateIfAsync(
+        "UPDATE Customers SET LastAccessedAt = @Now WHERE CustomerId = @CustomerId",
+        c => new { c.CustomerId, Now = DateTime.UtcNow },
         customerId,
-        when: c => c.IsActive)  // Only update if customer is active; customer passes through
+        when: c => c.IsActive)  // Only update if active; CustomerDto passes through
 , ct);
 ```
 
-When `when:` returns `false`, the operation is skipped and the current value passes through unchanged - no result selector is needed.
+**From `DbResult`** - The predicate is a simple `Func<bool>`:
+
+```csharp
+var request = new { ShouldAudit = true };
+
+return await conn.ExecuteTransactionAsync(ctx =>
+    ctx.InsertAsync(
+        "INSERT INTO Orders (...) VALUES (...)",
+        new { OrderId = orderId, ... })
+    .ThenInsertIfAsync(
+        "INSERT INTO AuditLog (...) VALUES (...)",
+        new { ... },
+        when: () => request.ShouldAudit)  // Captures external value
+, ct);
+```
+
+### Conditional Operations with Type Transformation
+
+When using `ThenXxxIfAsync` with a `resultSelector`, the type transforms regardless of whether the operation executes. This enables powerful composition patterns:
+
+**From `DbResult<T>` to `DbResult<TResult>`:**
+
+```csharp
+return await conn.ExecuteTransactionAsync(ctx =>
+    ctx.GetAsync<CustomerDto>(
+        "SELECT * FROM Customers WHERE CustomerId = @Id",
+        new { Id = customerId },
+        customerId)
+    .ThenInsertIfAsync(
+        "INSERT INTO Orders (...) VALUES (...)",
+        c => new { OrderId = orderId, c.CustomerId, ... },
+        c => orderId,  // resultSelector: CustomerDto -> string (orderId)
+        when: c => c.IsActive)
+    .ThenUpdateAsync(  // Now receives string (orderId), not CustomerDto
+        "UPDATE Orders SET Status = @Status WHERE OrderId = @Id",
+        oid => new { Id = oid, Status = "Confirmed" },
+        orderId)
+, ct);
+```
+
+**From `DbResult` to `DbResult<T>`:**
+
+```csharp
+return await conn.ExecuteTransactionAsync<string>(ctx =>
+    ctx.InsertAsync(
+        "INSERT INTO Users (...) VALUES (...)",
+        new { ... })
+    .ThenInsertIfAsync(
+        "INSERT INTO Orders (...) VALUES (...)",
+        new { OrderId = orderId, ... },
+        () => orderId,  // resultSelector: transforms DbResult -> DbResult<string>
+        when: () => shouldCreateOrder)
+    .ThenUpdateAsync(  // Receives string (orderId)
+        "UPDATE Orders SET Amount = @Amount WHERE Id = @Id",
+        oid => new { Id = oid, Amount = 100.0 },
+        orderId)
+, ct);
+```
+
+The key insight: **`resultSelector` always runs** (when the chain is successful), even if `when` returns `false` and the operation is skipped. This allows consistent type transformation for subsequent operations.
+
+### Escape Hatch: ThenAsync
+
+The `ThenAsync` methods allow you to integrate external async operations that return `Result` types into the fluent chain. This is useful for calling external services, complex validation, or chaining to other repositories:
+
+```csharp
+return await conn.ExecuteTransactionAsync(ctx =>
+    ctx.GetAsync<CustomerDto>(
+        "SELECT * FROM Customers WHERE CustomerId = @Id",
+        new { Id = customerId },
+        customerId)
+    .ThenAsync(async customer => {
+        // Call external service - if it fails, transaction rolls back
+        return await paymentService.ValidateCustomerAsync(customer.CustomerId);
+    })
+    .ThenInsertAsync(
+        "INSERT INTO Orders (...) VALUES (...)",
+        new { OrderId = orderId, CustomerId = customerId, ... })
+, ct);
+```
+
+Use `ThenAsync<TResult>` when the external operation produces a value needed by subsequent operations:
+
+```csharp
+return await conn.ExecuteTransactionAsync(ctx =>
+    ctx.GetAsync<CustomerDto>(...)
+    .ThenAsync<PaymentToken>(async customer => {
+        // External call returns a value for the chain
+        return await paymentService.CreateTokenAsync(customer.CustomerId);
+    })
+    .ThenInsertAsync(
+        "INSERT INTO Orders (...) VALUES (...)",
+        token => new { OrderId = orderId, PaymentToken = token.Value, ... })
+, ct);
+```
 
 ### Error Short-Circuiting
 

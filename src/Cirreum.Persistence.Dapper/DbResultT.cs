@@ -92,7 +92,7 @@ public readonly struct DbResult<T>(TransactionContext builder, Task<Result<T>> r
 	/// </summary>
 	/// <param name="next">The async operation to execute, receiving the current value.</param>
 	public DbResult<TResult> ThenAsync<TResult>(Func<T, Task<Result<TResult>>> next)
-		=> new(builder, ThenAsyncCore(next));
+		=> new(builder, this.ThenAsyncCore(next));
 
 	private async Task<Result<TResult>> ThenAsyncCore<TResult>(Func<T, Task<Result<TResult>>> next) {
 		var result = await resultTask.ConfigureAwait(false);
