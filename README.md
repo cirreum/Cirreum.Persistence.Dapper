@@ -411,6 +411,19 @@ return await conn.ExecuteTransactionAsync<string>(ctx =>
 
 The key insight: **`resultSelector` always runs** (when the chain is successful), even if `when` returns `false` and the operation is skipped. This allows consistent type transformation for subsequent operations.
 
+**Transform only when the operation executes:** If you want to transform the type only when the conditional operation actually runs, use the overload without a `resultSelector` (which passes through the current type) and then chain a `MapAsync`:
+
+```csharp
+return await conn.ExecuteTransactionAsync(ctx =>
+    ctx.GetAsync<CustomerDto>(...)
+    .ThenInsertIfAsync(
+        "INSERT INTO PremiumCustomers (...) VALUES (...)",
+        c => new { c.CustomerId, ... },
+        when: c => c.IsPremium)  // CustomerDto passes through
+    .MapAsync(c => new CustomerSummary(c.CustomerId, c.Name))  // Transform after
+, ct);
+```
+
 ### Escape Hatch: ThenAsync
 
 The `ThenAsync` methods allow you to integrate external async operations that return `Result` types into the fluent chain. This is useful for calling external services, complex validation, or chaining to other repositories:
