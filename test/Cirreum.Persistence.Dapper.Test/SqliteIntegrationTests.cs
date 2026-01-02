@@ -722,6 +722,7 @@ public sealed class SqliteIntegrationTests {
 				"DELETE FROM Users WHERE Id = @Id",
 				user => new { user.Id },
 				userId)
+			.ToResult()
 , this.TestContext.CancellationToken);
 
 		// Assert
