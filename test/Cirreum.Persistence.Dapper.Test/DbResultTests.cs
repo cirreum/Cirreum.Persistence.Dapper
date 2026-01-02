@@ -298,10 +298,72 @@ public sealed class DbResultTests {
 
 	#endregion
 
+	#region ThenAsync (to generic Result<TResult>)
+
+	[TestMethod]
+	public async Task DbResult_ThenAsyncGeneric_WhenSuccess_ExecutesNextAndReturnsValue() {
+		// Arrange
+		var successResult = Task.FromResult(Result.From(42));
+		var dbResult = new DbResult<int>(default, successResult);
+
+		// Act
+		var result = await dbResult.ThenAsync(async x => {
+			await Task.Delay(1, this.TestContext.CancellationToken);
+			return Result.From($"Value was {x}");
+		});
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		Assert.AreEqual("Value was 42", result.Value);
+	}
+
+	[TestMethod]
+	public async Task DbResult_ThenAsyncGeneric_WhenFailure_DoesNotExecuteNext() {
+		// Arrange
+		var error = new NotFoundException("Not found");
+		var failedResult = Task.FromResult(Result.Fail<int>(error));
+		var dbResult = new DbResult<int>(default, failedResult);
+		var nextExecuted = false;
+
+		// Act
+		var result = await dbResult.ThenAsync(async _ => {
+			await Task.Delay(1, this.TestContext.CancellationToken);
+			nextExecuted = true;
+			return Result.From("Should not reach");
+		});
+
+		// Assert
+		Assert.IsTrue(result.IsFailure);
+		Assert.AreSame(error, result.Error);
+		Assert.IsFalse(nextExecuted);
+	}
+
+	[TestMethod]
+	public async Task DbResult_ThenAsyncGeneric_WhenNextFails_PropagatesError() {
+		// Arrange
+		var successResult = Task.FromResult(Result.From(42));
+		var dbResult = new DbResult<int>(default, successResult);
+		var nextError = new BadRequestException("Next failed");
+
+		// Act
+		var result = await dbResult.ThenAsync(async _ => {
+			await Task.Delay(1, this.TestContext.CancellationToken);
+			return Result.Fail<string>(nextError);
+		});
+
+		// Assert
+		Assert.IsTrue(result.IsFailure);
+		Assert.AreSame(nextError, result.Error);
+	}
+
+	#endregion
+
 }
 
 [TestClass]
 public sealed class DbResultNonGenericTests {
+
+	public TestContext TestContext { get; set; }
 
 	#region Implicit Conversion
 
@@ -345,6 +407,128 @@ public sealed class DbResultNonGenericTests {
 		// Assert
 		Assert.IsTrue(result.IsFailure);
 		Assert.AreSame(error, result.Error);
+	}
+
+	#endregion
+
+	#region ThenAsync (to non-generic Result)
+
+	[TestMethod]
+	public async Task DbResultNonGeneric_ThenAsync_WhenSuccess_ExecutesNext() {
+		// Arrange
+		var successResult = Task.FromResult(Result.Success);
+		var dbResult = new DbResult(default, successResult);
+		var nextExecuted = false;
+
+		// Act
+		var result = await dbResult.ThenAsync(async () => {
+			await Task.Delay(1, this.TestContext.CancellationToken);
+			nextExecuted = true;
+			return Result.Success;
+		});
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		Assert.IsTrue(nextExecuted);
+	}
+
+	[TestMethod]
+	public async Task DbResultNonGeneric_ThenAsync_WhenFailure_DoesNotExecuteNext() {
+		// Arrange
+		var error = new NotFoundException("Not found");
+		var failedResult = Task.FromResult(Result.Fail(error));
+		var dbResult = new DbResult(default, failedResult);
+		var nextExecuted = false;
+
+		// Act
+		var result = await dbResult.ThenAsync(async () => {
+			await Task.Delay(1, this.TestContext.CancellationToken);
+			nextExecuted = true;
+			return Result.Success;
+		});
+
+		// Assert
+		Assert.IsTrue(result.IsFailure);
+		Assert.AreSame(error, result.Error);
+		Assert.IsFalse(nextExecuted);
+	}
+
+	[TestMethod]
+	public async Task DbResultNonGeneric_ThenAsync_WhenNextFails_PropagatesError() {
+		// Arrange
+		var successResult = Task.FromResult(Result.Success);
+		var dbResult = new DbResult(default, successResult);
+		var nextError = new BadRequestException("Next failed");
+
+		// Act
+		var result = await dbResult.ThenAsync(async () => {
+			await Task.Delay(1, this.TestContext.CancellationToken);
+			return Result.Fail(nextError);
+		});
+
+		// Assert
+		Assert.IsTrue(result.IsFailure);
+		Assert.AreSame(nextError, result.Error);
+	}
+
+	#endregion
+
+	#region ThenAsync (to generic Result<T>)
+
+	[TestMethod]
+	public async Task DbResultNonGeneric_ThenAsyncGeneric_WhenSuccess_ExecutesNextAndReturnsValue() {
+		// Arrange
+		var successResult = Task.FromResult(Result.Success);
+		var dbResult = new DbResult(default, successResult);
+
+		// Act
+		var result = await dbResult.ThenAsync(async () => {
+			await Task.Delay(1, this.TestContext.CancellationToken);
+			return Result.From(42);
+		});
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		Assert.AreEqual(42, result.Value);
+	}
+
+	[TestMethod]
+	public async Task DbResultNonGeneric_ThenAsyncGeneric_WhenFailure_DoesNotExecuteNext() {
+		// Arrange
+		var error = new NotFoundException("Not found");
+		var failedResult = Task.FromResult(Result.Fail(error));
+		var dbResult = new DbResult(default, failedResult);
+		var nextExecuted = false;
+
+		// Act
+		var result = await dbResult.ThenAsync(async () => {
+			await Task.Delay(1, this.TestContext.CancellationToken);
+			nextExecuted = true;
+			return Result.From(42);
+		});
+
+		// Assert
+		Assert.IsTrue(result.IsFailure);
+		Assert.AreSame(error, result.Error);
+		Assert.IsFalse(nextExecuted);
+	}
+
+	[TestMethod]
+	public async Task DbResultNonGeneric_ThenAsyncGeneric_WhenNextFails_PropagatesError() {
+		// Arrange
+		var successResult = Task.FromResult(Result.Success);
+		var dbResult = new DbResult(default, successResult);
+		var nextError = new BadRequestException("Next failed");
+
+		// Act
+		var result = await dbResult.ThenAsync(async () => {
+			await Task.Delay(1, this.TestContext.CancellationToken);
+			return Result.Fail<int>(nextError);
+		});
+
+		// Assert
+		Assert.IsTrue(result.IsFailure);
+		Assert.AreSame(nextError, result.Error);
 	}
 
 	#endregion

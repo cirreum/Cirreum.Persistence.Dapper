@@ -1595,7 +1595,7 @@ public sealed class SqliteIntegrationTests {
 	#region Conditional Operations (when: parameter)
 
 	[TestMethod]
-	public async Task ThenInsertAsync_WithWhenTrue_ExecutesInsert() {
+	public async Task ThenInsertIfAsync_WithWhenTrue_ExecutesInsert() {
 		// Arrange
 		using var conn = CreateConnection();
 		CreateTestSchema(conn);
@@ -1610,7 +1610,7 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenInsertAsync(
+			.ThenInsertIfAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				user => new { Id = orderId, UserId = user.Id, Amount = 100.0 },
 				when: _ => true)  // Always execute
@@ -1626,7 +1626,7 @@ public sealed class SqliteIntegrationTests {
 	}
 
 	[TestMethod]
-	public async Task ThenInsertAsync_WithWhenFalse_SkipsInsert() {
+	public async Task ThenInsertIfAsync_WithWhenFalse_SkipsInsert() {
 		// Arrange
 		using var conn = CreateConnection();
 		CreateTestSchema(conn);
@@ -1641,7 +1641,7 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenInsertAsync(
+			.ThenInsertIfAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				user => new { Id = orderId, UserId = user.Id, Amount = 100.0 },
 				when: _ => false)  // Never execute
@@ -1656,7 +1656,7 @@ public sealed class SqliteIntegrationTests {
 	}
 
 	[TestMethod]
-	public async Task ThenInsertAsync_WithWhenBasedOnValue_ConditionallExecutes() {
+	public async Task ThenInsertIfAsync_WithWhenBasedOnValue_ConditionallExecutes() {
 		// Arrange
 		using var conn = CreateConnection();
 		CreateTestSchema(conn);
@@ -1672,7 +1672,7 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenInsertAsync(
+			.ThenInsertIfAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				user => new { Id = orderId, UserId = user.Id, Amount = 100.0 },
 				when: user => user.Name == "Admin")  // Only for Admin users
@@ -1687,7 +1687,7 @@ public sealed class SqliteIntegrationTests {
 	}
 
 	[TestMethod]
-	public async Task ThenInsertAsync_Generic_WithWhenFalse_ReturnsResultSelectorValue() {
+	public async Task ThenInsertIfAsync_Generic_WithWhenFalse_ReturnsResultSelectorValue() {
 		// Arrange
 		using var conn = CreateConnection();
 		CreateTestSchema(conn);
@@ -1702,7 +1702,7 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenInsertAsync(
+			.ThenInsertIfAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				user => new { Id = orderId, UserId = user.Id, Amount = 100.0 },
 				_ => orderId,  // Func<T, TResult> - receives the current value
@@ -1719,7 +1719,113 @@ public sealed class SqliteIntegrationTests {
 	}
 
 	[TestMethod]
-	public async Task ThenUpdateAsync_WithWhenFalse_SkipsUpdate() {
+	public async Task ThenInsertIfAsync_Generic_WithWhenTrue_ExecutesInsertAndTransformsResult() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		var orderId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+
+		// Act - when=true with resultSelector: insert executes AND result transforms
+		var result = await conn.ExecuteTransactionAsync<string>(ctx =>
+			ctx.GetAsync<UserDto>(
+				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+				new { Id = userId },
+				userId)
+			.ThenInsertIfAsync(
+				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
+				user => new { Id = orderId, UserId = user.Id, Amount = 100.0 },
+				user => $"Order for {user.Name}",  // Func<T, TResult> - receives the current value
+				when: _ => true)  // Execute insert
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		Assert.AreEqual("Order for John", result.Value, "Result selector should transform using T value");
+		var order = conn.QuerySingleOrDefault<OrderDto>(
+			"SELECT Id, UserId, Amount FROM Orders WHERE Id = @Id",
+			new { Id = orderId });
+		Assert.IsNotNull(order, "Insert should have been executed");
+		Assert.AreEqual(100.0, order.Amount);
+	}
+
+	[TestMethod]
+	public async Task ThenInsertIfAsync_Generic_WithResultSelector_NextOperationReceivesTransformedType() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		var orderId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+
+		// Act - Chain: Get UserDto -> ThenInsertIfAsync transforms to string -> ThenUpdateAsync uses string
+		var result = await conn.ExecuteTransactionAsync(ctx =>
+			ctx.GetAsync<UserDto>(
+				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+				new { Id = userId },
+				userId)
+			.ThenInsertIfAsync(
+				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
+				user => new { Id = orderId, UserId = user.Id, Amount = 100.0 },
+				_ => orderId,  // Transform UserDto -> string (orderId)
+				when: _ => true)
+			.ThenUpdateAsync(  // This should receive string (orderId), not UserDto
+				"UPDATE Orders SET Amount = @Amount WHERE Id = @Id",
+				oid => new { Id = oid, Amount = 200.0 },  // oid is string
+				orderId)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		var order = conn.QuerySingle<OrderDto>(
+			"SELECT Id, UserId, Amount FROM Orders WHERE Id = @Id",
+			new { Id = orderId });
+		Assert.AreEqual(200.0, order.Amount, "Update should have used the transformed orderId");
+	}
+
+	[TestMethod]
+	public async Task ThenInsertIfAsync_Generic_WithResultSelector_WhenFalse_NextOperationReceivesTransformedType() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		var orderId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+		// Pre-create the order so we can update it
+		conn.Execute("INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
+			new { Id = orderId, UserId = userId, Amount = 50.0 });
+
+		// Act - when=false: insert skipped, but resultSelector still transforms type for next operation
+		var result = await conn.ExecuteTransactionAsync(ctx =>
+			ctx.GetAsync<UserDto>(
+				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+				new { Id = userId },
+				userId)
+			.ThenInsertIfAsync(
+				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
+				user => new { Id = Guid.NewGuid().ToString(), UserId = user.Id, Amount = 999.0 },
+				_ => orderId,  // Transform UserDto -> string (orderId)
+				when: _ => false)  // Skip insert
+			.ThenUpdateAsync(  // This should still receive string (orderId)
+				"UPDATE Orders SET Amount = @Amount WHERE Id = @Id",
+				oid => new { Id = oid, Amount = 300.0 },
+				orderId)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		var order = conn.QuerySingle<OrderDto>(
+			"SELECT Id, UserId, Amount FROM Orders WHERE Id = @Id",
+			new { Id = orderId });
+		Assert.AreEqual(300.0, order.Amount, "Update should have used the transformed orderId even when insert was skipped");
+	}
+
+	[TestMethod]
+	public async Task ThenUpdateIfAsync_WithWhenFalse_SkipsUpdate() {
 		// Arrange
 		using var conn = CreateConnection();
 		CreateTestSchema(conn);
@@ -1733,7 +1839,7 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenUpdateAsync(
+			.ThenUpdateIfAsync(
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				user => new { user.Id, Name = "UpdatedName" },
 				userId,
@@ -1749,7 +1855,7 @@ public sealed class SqliteIntegrationTests {
 	}
 
 	[TestMethod]
-	public async Task ThenUpdateAsync_WithWhenAndResultSelectorFalse_SkipsUpdate() {
+	public async Task ThenUpdateIfAsync_WithWhenAndResultSelectorFalse_SkipsUpdate() {
 		// Arrange
 		using var conn = CreateConnection();
 		CreateTestSchema(conn);
@@ -1764,7 +1870,7 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenUpdateAsync(
+			.ThenUpdateIfAsync(
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				user => new { user.Id, Name = "UpdatedName" },
 				userId,
@@ -1781,7 +1887,7 @@ public sealed class SqliteIntegrationTests {
 	}
 
 	[TestMethod]
-	public async Task ThenUpdateAsync_WithWhenTrue_ExecutesUpdate() {
+	public async Task ThenUpdateIfAsync_WithWhenTrue_ExecutesUpdate() {
 		// Arrange
 		using var conn = CreateConnection();
 		CreateTestSchema(conn);
@@ -1795,7 +1901,7 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenUpdateAsync(
+			.ThenUpdateIfAsync(
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				user => new { user.Id, Name = "UpdatedName" },
 				userId,
@@ -1811,7 +1917,7 @@ public sealed class SqliteIntegrationTests {
 	}
 
 	[TestMethod]
-	public async Task ThenUpdateAsync_WithWhenAndResultSelectorTrue_ExecutesUpdate() {
+	public async Task ThenUpdateIfAsync_WithWhenAndResultSelectorTrue_ExecutesUpdate() {
 		// Arrange
 		using var conn = CreateConnection();
 		CreateTestSchema(conn);
@@ -1825,7 +1931,7 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenUpdateAsync(
+			.ThenUpdateIfAsync(
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				user => new { user.Id, Name = "UpdatedName" },
 				userId,
@@ -1842,7 +1948,7 @@ public sealed class SqliteIntegrationTests {
 	}
 
 	[TestMethod]
-	public async Task ThenDeleteAsync_WithWhenFalse_SkipsDelete() {
+	public async Task ThenDeleteIfAsync_WithWhenFalse_SkipsDelete() {
 		// Arrange
 		using var conn = CreateConnection();
 		CreateTestSchema(conn);
@@ -1856,7 +1962,7 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenDeleteAsync(
+			.ThenDeleteIfAsync(
 				"DELETE FROM Users WHERE Id = @Id",
 				user => new { user.Id },
 				userId,
@@ -1872,7 +1978,7 @@ public sealed class SqliteIntegrationTests {
 	}
 
 	[TestMethod]
-	public async Task ThenDeleteAsync_WithWhenTrue_ExecutesDelete() {
+	public async Task ThenDeleteIfAsync_WithWhenTrue_ExecutesDelete() {
 		// Arrange
 		using var conn = CreateConnection();
 		CreateTestSchema(conn);
@@ -1886,7 +1992,7 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenDeleteAsync(
+			.ThenDeleteIfAsync(
 				"DELETE FROM Users WHERE Id = @Id",
 				user => new { user.Id },
 				userId,
@@ -1919,11 +2025,11 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenInsertAsync(
+			.ThenInsertIfAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				user => new { Id = orderId1, UserId = user.Id, Amount = 100.0 },
 				when: user => user.Name == "Admin")  // Should execute, UserDto passes through
-			.ThenInsertAsync(
+			.ThenInsertIfAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				_ => new { Id = orderId2, UserId = userId, Amount = 200.0 },
 				when: _ => false)  // Should skip, UserDto passes through
@@ -1948,7 +2054,7 @@ public sealed class SqliteIntegrationTests {
 	#region Non-Generic Conditional Operations (when: Func<bool>)
 
 	[TestMethod]
-	public async Task NonGenericDbResult_ThenInsertAsync_WithWhenTrue_ExecutesInsert() {
+	public async Task NonGenericDbResult_ThenInsertIfAsync_WithWhenTrue_ExecutesInsert() {
 		// Arrange
 		using var conn = CreateConnection();
 		CreateTestSchema(conn);
@@ -1964,7 +2070,7 @@ public sealed class SqliteIntegrationTests {
 			ctx.InsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = Guid.NewGuid().ToString(), UserId = userId, Amount = 50.0 })
-			.ThenInsertAsync(
+			.ThenInsertIfAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = orderId, UserId = userId, Amount = 100.0 },
 				when: () => shouldInsert)
@@ -1977,7 +2083,7 @@ public sealed class SqliteIntegrationTests {
 	}
 
 	[TestMethod]
-	public async Task NonGenericDbResult_ThenInsertAsync_WithWhenFalse_SkipsInsert() {
+	public async Task NonGenericDbResult_ThenInsertIfAsync_WithWhenFalse_SkipsInsert() {
 		// Arrange
 		using var conn = CreateConnection();
 		CreateTestSchema(conn);
@@ -1993,7 +2099,7 @@ public sealed class SqliteIntegrationTests {
 			ctx.InsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = Guid.NewGuid().ToString(), UserId = userId, Amount = 50.0 })
-			.ThenInsertAsync(
+			.ThenInsertIfAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = orderId, UserId = userId, Amount = 100.0 },
 				when: () => shouldInsert)  // External value
@@ -2006,7 +2112,7 @@ public sealed class SqliteIntegrationTests {
 	}
 
 	[TestMethod]
-	public async Task NonGenericDbResult_ThenInsertAsyncWithResultSelector_WithWhenFalse_SkipsButReturnsValue() {
+	public async Task NonGenericDbResult_ThenInsertIfAsyncWithResultSelector_WithWhenFalse_SkipsButReturnsValue() {
 		// Arrange
 		using var conn = CreateConnection();
 		CreateTestSchema(conn);
@@ -2022,7 +2128,7 @@ public sealed class SqliteIntegrationTests {
 			ctx.InsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = Guid.NewGuid().ToString(), UserId = userId, Amount = 50.0 })
-			.ThenInsertAsync(
+			.ThenInsertIfAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = orderId, UserId = userId, Amount = 100.0 },
 				() => orderId,
@@ -2039,7 +2145,101 @@ public sealed class SqliteIntegrationTests {
 	}
 
 	[TestMethod]
-	public async Task NonGenericDbResult_ThenUpdateAsync_WithWhenFalse_SkipsUpdate() {
+	public async Task NonGenericDbResult_ThenInsertIfAsyncWithResultSelector_WithWhenTrue_ExecutesInsertAndReturnsValue() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		var orderId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+
+		// Act - when=true: insert executes AND resultSelector returns value
+		var result = await conn.ExecuteTransactionAsync<string>(ctx =>
+			ctx.InsertAsync(
+				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
+				new { Id = Guid.NewGuid().ToString(), UserId = userId, Amount = 50.0 })
+			.ThenInsertIfAsync(
+				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
+				new { Id = orderId, UserId = userId, Amount = 100.0 },
+				() => $"Created order {orderId}",
+				when: () => true)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		Assert.AreEqual($"Created order {orderId}", result.Value);
+		var order = conn.QuerySingleOrDefault<OrderDto>(
+			"SELECT Id, UserId, Amount FROM Orders WHERE Id = @Id",
+			new { Id = orderId });
+		Assert.IsNotNull(order, "Second insert should have been executed");
+		Assert.AreEqual(100.0, order.Amount);
+	}
+
+	[TestMethod]
+	public async Task NonGenericDbResult_ThenUpdateIfAsyncWithResultSelector_WithWhenFalse_SkipsButReturnsValue() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+
+		// Act - when=false: update skipped, resultSelector still returns value
+		var result = await conn.ExecuteTransactionAsync<string>(ctx =>
+			ctx.InsertAsync(
+				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
+				new { Id = Guid.NewGuid().ToString(), UserId = userId, Amount = 50.0 })
+			.ThenUpdateIfAsync(
+				"UPDATE Users SET Name = @Name WHERE Id = @Id",
+				new { Id = userId, Name = "UpdatedName" },
+				userId,
+				() => $"User {userId}",
+				when: () => false)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		Assert.AreEqual($"User {userId}", result.Value, "Result selector should return value even when skipped");
+		var user = conn.QuerySingle<UserDto>(
+			"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+			new { Id = userId });
+		Assert.AreEqual("John", user.Name, "Update should have been skipped");
+	}
+
+	[TestMethod]
+	public async Task NonGenericDbResult_ThenUpdateIfAsyncWithResultSelector_WithWhenTrue_ExecutesUpdateAndReturnsValue() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+
+		// Act - when=true: update executes AND resultSelector returns value
+		var result = await conn.ExecuteTransactionAsync<string>(ctx =>
+			ctx.InsertAsync(
+				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
+				new { Id = Guid.NewGuid().ToString(), UserId = userId, Amount = 50.0 })
+			.ThenUpdateIfAsync(
+				"UPDATE Users SET Name = @Name WHERE Id = @Id",
+				new { Id = userId, Name = "UpdatedName" },
+				userId,
+				() => $"Updated user {userId}",
+				when: () => true)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		Assert.AreEqual($"Updated user {userId}", result.Value);
+		var user = conn.QuerySingle<UserDto>(
+			"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+			new { Id = userId });
+		Assert.AreEqual("UpdatedName", user.Name, "Update should have been executed");
+	}
+
+	[TestMethod]
+	public async Task NonGenericDbResult_ThenUpdateIfAsync_WithWhenFalse_SkipsUpdate() {
 		// Arrange
 		using var conn = CreateConnection();
 		CreateTestSchema(conn);
@@ -2054,7 +2254,7 @@ public sealed class SqliteIntegrationTests {
 			ctx.InsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = Guid.NewGuid().ToString(), UserId = userId, Amount = 50.0 })
-			.ThenUpdateAsync(
+			.ThenUpdateIfAsync(
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				new { Id = userId, Name = "UpdatedName" },
 				userId,
@@ -2070,7 +2270,7 @@ public sealed class SqliteIntegrationTests {
 	}
 
 	[TestMethod]
-	public async Task NonGenericDbResult_ThenUpdateAsync_WithWhenTrue_ExecutesUpdate() {
+	public async Task NonGenericDbResult_ThenUpdateIfAsync_WithWhenTrue_ExecutesUpdate() {
 		// Arrange
 		using var conn = CreateConnection();
 		CreateTestSchema(conn);
@@ -2085,7 +2285,7 @@ public sealed class SqliteIntegrationTests {
 			ctx.InsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = Guid.NewGuid().ToString(), UserId = userId, Amount = 50.0 })
-			.ThenUpdateAsync(
+			.ThenUpdateIfAsync(
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				new { Id = userId, Name = "UpdatedName" },
 				userId,
@@ -2101,7 +2301,7 @@ public sealed class SqliteIntegrationTests {
 	}
 
 	[TestMethod]
-	public async Task NonGenericDbResult_ThenDeleteAsync_WithWhenFalse_SkipsDelete() {
+	public async Task NonGenericDbResult_ThenDeleteIfAsync_WithWhenFalse_SkipsDelete() {
 		// Arrange
 		using var conn = CreateConnection();
 		CreateTestSchema(conn);
@@ -2116,7 +2316,7 @@ public sealed class SqliteIntegrationTests {
 			ctx.InsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = Guid.NewGuid().ToString(), UserId = userId, Amount = 50.0 })
-			.ThenDeleteAsync(
+			.ThenDeleteIfAsync(
 				"DELETE FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId,
@@ -2132,7 +2332,7 @@ public sealed class SqliteIntegrationTests {
 	}
 
 	[TestMethod]
-	public async Task NonGenericDbResult_ThenDeleteAsync_WithWhenTrue_ExecutesDelete() {
+	public async Task NonGenericDbResult_ThenDeleteIfAsync_WithWhenTrue_ExecutesDelete() {
 		// Arrange
 		using var conn = CreateConnection();
 		CreateTestSchema(conn);
@@ -2148,7 +2348,7 @@ public sealed class SqliteIntegrationTests {
 			ctx.InsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = orderId, UserId = userId, Amount = 50.0 })
-			.ThenDeleteAsync(
+			.ThenDeleteIfAsync(
 				"DELETE FROM Orders WHERE Id = @Id",
 				new { Id = orderId },
 				orderId,
@@ -2182,7 +2382,7 @@ public sealed class SqliteIntegrationTests {
 			ctx.InsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = orderId, UserId = userId, Amount = 100.0 })
-			.ThenInsertAsync(
+			.ThenInsertIfAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = auditId, UserId = userId, Amount = 0.0 },  // Using Orders as "audit log" for simplicity
 				when: () => request.ShouldAudit)  // Closure captures external value
@@ -2213,7 +2413,7 @@ public sealed class SqliteIntegrationTests {
 			ctx.InsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = orderId, UserId = userId, Amount = 100.0 })
-			.ThenInsertAsync(
+			.ThenInsertIfAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = auditId, UserId = userId, Amount = 0.0 },
 				when: () => request.ShouldAudit)
@@ -2223,6 +2423,227 @@ public sealed class SqliteIntegrationTests {
 		Assert.IsTrue(result.IsSuccess);
 		var count = conn.ExecuteScalar<long>("SELECT COUNT(*) FROM Orders WHERE UserId = @UserId", new { UserId = userId });
 		Assert.AreEqual(1L, count, "Only order should be inserted, audit skipped");
+	}
+
+	[TestMethod]
+	public async Task NonGenericDbResult_ThenInsertIfAsyncWithResultSelector_WhenTrue_NextOperationReceivesTransformedType() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		var orderId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+
+		// Act - Chain: Insert (DbResult) -> ThenInsertIfAsync<T> transforms to string -> ThenUpdateAsync uses string
+		var result = await conn.ExecuteTransactionAsync(ctx =>
+			ctx.InsertAsync(
+				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+				new { Id = Guid.NewGuid().ToString(), Name = "Jane", Email = "jane@test.com" })
+			.ThenInsertIfAsync(
+				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
+				new { Id = orderId, UserId = userId, Amount = 100.0 },
+				() => orderId,  // Transform DbResult -> DbResult<string>
+				when: () => true)
+			.ThenUpdateAsync(  // This receives string (orderId)
+				"UPDATE Orders SET Amount = @Amount WHERE Id = @Id",
+				oid => new { Id = oid, Amount = 250.0 },
+				orderId)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		var order = conn.QuerySingle<OrderDto>(
+			"SELECT Id, UserId, Amount FROM Orders WHERE Id = @Id",
+			new { Id = orderId });
+		Assert.AreEqual(250.0, order.Amount, "Update should have used the transformed orderId");
+	}
+
+	[TestMethod]
+	public async Task NonGenericDbResult_ThenInsertIfAsyncWithResultSelector_WhenFalse_NextOperationReceivesTransformedType() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		var orderId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+		// Pre-create order so update works
+		conn.Execute("INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
+			new { Id = orderId, UserId = userId, Amount = 50.0 });
+
+		// Act - when=false: insert skipped, resultSelector still transforms type for next operation
+		var result = await conn.ExecuteTransactionAsync(ctx =>
+			ctx.InsertAsync(
+				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+				new { Id = Guid.NewGuid().ToString(), Name = "Jane", Email = "jane@test.com" })
+			.ThenInsertIfAsync(
+				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
+				new { Id = Guid.NewGuid().ToString(), UserId = userId, Amount = 999.0 },
+				() => orderId,  // Transform DbResult -> DbResult<string>
+				when: () => false)  // Skip insert
+			.ThenUpdateAsync(  // This should still receive string (orderId)
+				"UPDATE Orders SET Amount = @Amount WHERE Id = @Id",
+				oid => new { Id = oid, Amount = 350.0 },
+				orderId)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		var order = conn.QuerySingle<OrderDto>(
+			"SELECT Id, UserId, Amount FROM Orders WHERE Id = @Id",
+			new { Id = orderId });
+		Assert.AreEqual(350.0, order.Amount, "Update should have used the transformed orderId even when insert was skipped");
+	}
+
+	[TestMethod]
+	public async Task NonGenericDbResult_ThenUpdateIfAsyncWithResultSelector_WhenTrue_NextOperationReceivesTransformedType() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		var orderId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+		conn.Execute("INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
+			new { Id = orderId, UserId = userId, Amount = 50.0 });
+
+		// Act - Chain: Insert (DbResult) -> ThenUpdateIfAsync<T> transforms to string -> ThenUpdateAsync uses string
+		var result = await conn.ExecuteTransactionAsync(ctx =>
+			ctx.InsertAsync(
+				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+				new { Id = Guid.NewGuid().ToString(), Name = "Jane", Email = "jane@test.com" })
+			.ThenUpdateIfAsync(
+				"UPDATE Orders SET Amount = @Amount WHERE Id = @Id",
+				new { Id = orderId, Amount = 100.0 },
+				orderId,
+				() => orderId,  // Transform DbResult -> DbResult<string>
+				when: () => true)
+			.ThenUpdateAsync(  // This receives string (orderId)
+				"UPDATE Orders SET Amount = @Amount WHERE Id = @Id",
+				oid => new { Id = oid, Amount = 400.0 },
+				orderId)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		var order = conn.QuerySingle<OrderDto>(
+			"SELECT Id, UserId, Amount FROM Orders WHERE Id = @Id",
+			new { Id = orderId });
+		Assert.AreEqual(400.0, order.Amount, "Second update should have used the transformed orderId");
+	}
+
+	[TestMethod]
+	public async Task NonGenericDbResult_ThenUpdateIfAsyncWithResultSelector_WhenFalse_NextOperationReceivesTransformedType() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		var orderId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+		conn.Execute("INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
+			new { Id = orderId, UserId = userId, Amount = 50.0 });
+
+		// Act - when=false: first update skipped, resultSelector still transforms type for next operation
+		var result = await conn.ExecuteTransactionAsync(ctx =>
+			ctx.InsertAsync(
+				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+				new { Id = Guid.NewGuid().ToString(), Name = "Jane", Email = "jane@test.com" })
+			.ThenUpdateIfAsync(
+				"UPDATE Orders SET Amount = @Amount WHERE Id = @Id",
+				new { Id = orderId, Amount = 999.0 },  // Would set to 999 but will be skipped
+				orderId,
+				() => orderId,  // Transform DbResult -> DbResult<string>
+				when: () => false)  // Skip this update
+			.ThenUpdateAsync(  // This should still receive string (orderId)
+				"UPDATE Orders SET Amount = @Amount WHERE Id = @Id",
+				oid => new { Id = oid, Amount = 500.0 },
+				orderId)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		var order = conn.QuerySingle<OrderDto>(
+			"SELECT Id, UserId, Amount FROM Orders WHERE Id = @Id",
+			new { Id = orderId });
+		Assert.AreEqual(500.0, order.Amount, "Second update should have used the transformed orderId even when first update was skipped");
+	}
+
+	[TestMethod]
+	public async Task ThenUpdateIfAsync_Generic_WithResultSelector_WhenTrue_NextOperationReceivesTransformedType() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		var orderId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+		conn.Execute("INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
+			new { Id = orderId, UserId = userId, Amount = 50.0 });
+
+		// Act - Chain: Get UserDto -> ThenUpdateIfAsync transforms to string -> ThenUpdateAsync uses string
+		var result = await conn.ExecuteTransactionAsync(ctx =>
+			ctx.GetAsync<UserDto>(
+				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+				new { Id = userId },
+				userId)
+			.ThenUpdateIfAsync(
+				"UPDATE Orders SET Amount = @Amount WHERE UserId = @UserId",
+				user => new { UserId = user.Id, Amount = 150.0 },
+				orderId,
+				user => orderId,  // Transform UserDto -> string (orderId)
+				when: _ => true)
+			.ThenUpdateAsync(  // This receives string (orderId)
+				"UPDATE Orders SET Amount = @Amount WHERE Id = @Id",
+				oid => new { Id = oid, Amount = 600.0 },
+				orderId)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		var order = conn.QuerySingle<OrderDto>(
+			"SELECT Id, UserId, Amount FROM Orders WHERE Id = @Id",
+			new { Id = orderId });
+		Assert.AreEqual(600.0, order.Amount, "Second update should have used the transformed orderId");
+	}
+
+	[TestMethod]
+	public async Task ThenUpdateIfAsync_Generic_WithResultSelector_WhenFalse_NextOperationReceivesTransformedType() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		var orderId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+		conn.Execute("INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
+			new { Id = orderId, UserId = userId, Amount = 50.0 });
+
+		// Act - when=false: first update skipped, resultSelector still transforms type for next operation
+		var result = await conn.ExecuteTransactionAsync(ctx =>
+			ctx.GetAsync<UserDto>(
+				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+				new { Id = userId },
+				userId)
+			.ThenUpdateIfAsync(
+				"UPDATE Orders SET Amount = @Amount WHERE UserId = @UserId",
+				user => new { UserId = user.Id, Amount = 999.0 },  // Would set to 999 but will be skipped
+				orderId,
+				user => orderId,  // Transform UserDto -> string (orderId)
+				when: _ => false)  // Skip this update
+			.ThenUpdateAsync(  // This should still receive string (orderId)
+				"UPDATE Orders SET Amount = @Amount WHERE Id = @Id",
+				oid => new { Id = oid, Amount = 700.0 },
+				orderId)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		var order = conn.QuerySingle<OrderDto>(
+			"SELECT Id, UserId, Amount FROM Orders WHERE Id = @Id",
+			new { Id = orderId });
+		Assert.AreEqual(700.0, order.Amount, "Second update should have used the transformed orderId even when first update was skipped");
 	}
 
 	#endregion
