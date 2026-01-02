@@ -401,19 +401,19 @@ public readonly struct DbResult<T>(TransactionContext builder, Task<Result<T>> r
 	/// Chains a GET operation with mapping after a successful result.
 	/// </summary>
 	public DbResult<TModel> ThenGetAsync<TData, TModel>(string sql, object key, Func<TData, TModel> mapper)
-		=> new(builder, this.ThenGetAsyncCoreWithMapper<TData, TModel>(sql, null, key, mapper));
+		=> new(builder, this.ThenGetAsyncCoreWithMapper(sql, null, key, mapper));
 
 	/// <summary>
 	/// Chains a GET operation with parameters and mapping after a successful result.
 	/// </summary>
 	public DbResult<TModel> ThenGetAsync<TData, TModel>(string sql, object? parameters, object key, Func<TData, TModel> mapper)
-		=> new(builder, this.ThenGetAsyncCoreWithMapper<TData, TModel>(sql, parameters, key, mapper));
+		=> new(builder, this.ThenGetAsyncCoreWithMapper(sql, parameters, key, mapper));
 
 	/// <summary>
 	/// Chains a GET operation with mapping after a successful result, using the previous value to build parameters.
 	/// </summary>
 	public DbResult<TModel> ThenGetAsync<TData, TModel>(string sql, Func<T, object?> parametersFactory, object key, Func<TData, TModel> mapper)
-		=> new(builder, this.ThenGetAsyncCoreWithMapperAndFactory<TData, TModel>(sql, parametersFactory, key, mapper));
+		=> new(builder, this.ThenGetAsyncCoreWithMapperAndFactory(sql, parametersFactory, key, mapper));
 
 	private async Task<Result<TResult>> ThenGetAsyncCore<TResult>(string sql, object? parameters, object key) {
 		var result = await resultTask.ConfigureAwait(false);
@@ -476,20 +476,20 @@ public readonly struct DbResult<T>(TransactionContext builder, Task<Result<T>> r
 	/// <summary>
 	/// Chains a GET scalar operation with mapping after a successful result.
 	/// </summary>
-	public DbResult<TModel> ThenGetScalarAsync<TData, TModel>(string sql, Func<TData, TModel> mapper)
-		=> new(builder, this.ThenGetScalarAsyncCoreWithMapper<TData, TModel>(sql, null, mapper));
+	public DbResult<TModel> ThenGetScalarAsync<TData, TModel>(string sql, Func<TData?, TModel> mapper)
+		=> new(builder, this.ThenGetScalarAsyncCoreWithMapper(sql, null, mapper));
 
 	/// <summary>
 	/// Chains a GET scalar operation with parameters and mapping after a successful result.
 	/// </summary>
-	public DbResult<TModel> ThenGetScalarAsync<TData, TModel>(string sql, object? parameters, Func<TData, TModel> mapper)
-		=> new(builder, this.ThenGetScalarAsyncCoreWithMapper<TData, TModel>(sql, parameters, mapper));
+	public DbResult<TModel> ThenGetScalarAsync<TData, TModel>(string sql, object? parameters, Func<TData?, TModel> mapper)
+		=> new(builder, this.ThenGetScalarAsyncCoreWithMapper(sql, parameters, mapper));
 
 	/// <summary>
 	/// Chains a GET scalar operation with mapping after a successful result, using the previous value to build parameters.
 	/// </summary>
-	public DbResult<TModel> ThenGetScalarAsync<TData, TModel>(string sql, Func<T, object?> parametersFactory, Func<TData, TModel> mapper)
-		=> new(builder, this.ThenGetScalarAsyncCoreWithMapperAndFactory<TData, TModel>(sql, parametersFactory, mapper));
+	public DbResult<TModel> ThenGetScalarAsync<TData, TModel>(string sql, Func<T, object?> parametersFactory, Func<TData?, TModel> mapper)
+		=> new(builder, this.ThenGetScalarAsyncCoreWithMapperAndFactory(sql, parametersFactory, mapper));
 
 	private async Task<Result<TResult>> ThenGetScalarAsyncCore<TResult>(string sql, object? parameters) {
 		var result = await resultTask.ConfigureAwait(false);
@@ -509,7 +509,7 @@ public readonly struct DbResult<T>(TransactionContext builder, Task<Result<T>> r
 		return await builder.GetScalarAsync<TResult>(sql, parametersFactory(result.Value!)).Result.ConfigureAwait(false);
 	}
 
-	private async Task<Result<TModel>> ThenGetScalarAsyncCoreWithMapper<TData, TModel>(string sql, object? parameters, Func<TData, TModel> mapper) {
+	private async Task<Result<TModel>> ThenGetScalarAsyncCoreWithMapper<TData, TModel>(string sql, object? parameters, Func<TData?, TModel> mapper) {
 		var result = await resultTask.ConfigureAwait(false);
 		if (result.IsFailure) {
 			return result.Error!;
@@ -518,7 +518,7 @@ public readonly struct DbResult<T>(TransactionContext builder, Task<Result<T>> r
 		return await builder.GetScalarAsync(sql, parameters, mapper).Result.ConfigureAwait(false);
 	}
 
-	private async Task<Result<TModel>> ThenGetScalarAsyncCoreWithMapperAndFactory<TData, TModel>(string sql, Func<T, object?> parametersFactory, Func<TData, TModel> mapper) {
+	private async Task<Result<TModel>> ThenGetScalarAsyncCoreWithMapperAndFactory<TData, TModel>(string sql, Func<T, object?> parametersFactory, Func<TData?, TModel> mapper) {
 		var result = await resultTask.ConfigureAwait(false);
 		if (result.IsFailure) {
 			return result.Error!;
@@ -553,19 +553,19 @@ public readonly struct DbResult<T>(TransactionContext builder, Task<Result<T>> r
 	/// Chains a QueryAny operation with mapping after a successful result.
 	/// </summary>
 	public DbResult<IReadOnlyList<TModel>> ThenQueryAnyAsync<TData, TModel>(string sql, Func<TData, TModel> mapper)
-		=> new(builder, this.ThenQueryAnyAsyncCoreWithMapper<TData, TModel>(sql, null, mapper));
+		=> new(builder, this.ThenQueryAnyAsyncCoreWithMapper(sql, null, mapper));
 
 	/// <summary>
 	/// Chains a QueryAny operation with parameters and mapping after a successful result.
 	/// </summary>
 	public DbResult<IReadOnlyList<TModel>> ThenQueryAnyAsync<TData, TModel>(string sql, object? parameters, Func<TData, TModel> mapper)
-		=> new(builder, this.ThenQueryAnyAsyncCoreWithMapper<TData, TModel>(sql, parameters, mapper));
+		=> new(builder, this.ThenQueryAnyAsyncCoreWithMapper(sql, parameters, mapper));
 
 	/// <summary>
 	/// Chains a QueryAny operation with mapping after a successful result, using the previous value to build parameters.
 	/// </summary>
 	public DbResult<IReadOnlyList<TModel>> ThenQueryAnyAsync<TData, TModel>(string sql, Func<T, object?> parametersFactory, Func<TData, TModel> mapper)
-		=> new(builder, this.ThenQueryAnyAsyncCoreWithMapperAndFactory<TData, TModel>(sql, parametersFactory, mapper));
+		=> new(builder, this.ThenQueryAnyAsyncCoreWithMapperAndFactory(sql, parametersFactory, mapper));
 
 	private async Task<Result<IReadOnlyList<TResult>>> ThenQueryAnyAsyncCore<TResult>(string sql, object? parameters) {
 		var result = await resultTask.ConfigureAwait(false);

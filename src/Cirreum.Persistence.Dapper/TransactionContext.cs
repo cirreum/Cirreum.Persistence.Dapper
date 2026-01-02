@@ -9,17 +9,29 @@ using System.Data;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Use this builder within <see cref="DbConnectionExtensions.ExecuteInTransactionAsync"/> to chain
-/// multiple database operations that should be executed atomically.
+/// Use this context within <see cref="DbConnectionExtensions.ExecuteTransactionAsync"/> or
+/// <see cref="DbConnectionFactoryExtensions.ExecuteTransactionAsync"/> to chain multiple
+/// database operations that should be executed atomically.
 /// </para>
 /// <para>
-/// <strong>Usage Pattern:</strong>
+/// <strong>Usage with IDbConnection:</strong>
 /// </para>
 /// <code>
-/// return await conn.ExecuteInTransactionAsync(ctx => ctx
+/// await using var conn = await db.CreateConnectionAsync(cancellationToken);
+/// return await conn.ExecuteTransactionAsync(ctx => ctx
 ///     .InsertAsync(orderSql, orderParam)
-///     .ThenInsertAsync(db, lineItemSql, lineItemParam)
-///     .ThenUpdateAsync(db, inventorySql, inventoryParam, inventoryId)
+///     .ThenInsertAsync(lineItemSql, lineItemParam)
+///     .ThenUpdateAsync(inventorySql, inventoryParam, inventoryId)
+/// , cancellationToken);
+/// </code>
+/// <para>
+/// <strong>Usage with IDbConnectionFactory:</strong>
+/// </para>
+/// <code>
+/// return await db.ExecuteTransactionAsync(ctx => ctx
+///     .InsertAsync(orderSql, orderParam)
+///     .ThenInsertAsync(lineItemSql, lineItemParam)
+///     .ThenUpdateAsync(inventorySql, inventoryParam, inventoryId)
 /// , cancellationToken);
 /// </code>
 /// </remarks>
@@ -252,7 +264,7 @@ public readonly struct TransactionContext(
 	/// <param name="sql">The SQL query to execute.</param>
 	/// <param name="mapper">A function to transform the data value to the domain model.</param>
 	/// <returns>A <see cref="DbResult{T}"/> that can be chained with other database operations.</returns>
-	public DbResult<TModel> GetScalarAsync<TData, TModel>(string sql, Func<TData, TModel> mapper)
+	public DbResult<TModel> GetScalarAsync<TData, TModel>(string sql, Func<TData?, TModel> mapper)
 		=> new(this, connection.GetScalarAsync(sql, null, mapper, transaction, cancellationToken));
 
 	/// <summary>
@@ -265,7 +277,7 @@ public readonly struct TransactionContext(
 	/// <param name="parameters">An object containing the parameters to be passed to the SQL query.</param>
 	/// <param name="mapper">A function to transform the data value to the domain model.</param>
 	/// <returns>A <see cref="DbResult{T}"/> that can be chained with other database operations.</returns>
-	public DbResult<TModel> GetScalarAsync<TData, TModel>(string sql, object? parameters, Func<TData, TModel> mapper)
+	public DbResult<TModel> GetScalarAsync<TData, TModel>(string sql, object? parameters, Func<TData?, TModel> mapper)
 		=> new(this, connection.GetScalarAsync(sql, parameters, mapper, transaction, cancellationToken));
 
 	#endregion

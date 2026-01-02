@@ -201,7 +201,7 @@ public static class DbConnectionExtensions {
 				parameters,
 				transaction: transaction,
 				cancellationToken: cancellationToken));
-			return Result.From(result!);
+			return Result.FromNullable(result, new InvalidOperationException("Scalar query returned null. Use ISNULL/COALESCE in SQL."));
 		}
 
 		/// <summary>
@@ -234,7 +234,7 @@ public static class DbConnectionExtensions {
 		/// with the mapped scalar value.</returns>
 		public Task<Result<TModel>> GetScalarAsync<TData, TModel>(
 			string sql,
-			Func<TData, TModel> mapper,
+			Func<TData?, TModel> mapper,
 			IDbTransaction? transaction = null,
 			CancellationToken cancellationToken = default)
 			=> conn.GetScalarAsync(sql, null, mapper, transaction, cancellationToken);
@@ -271,7 +271,7 @@ public static class DbConnectionExtensions {
 		public async Task<Result<TModel>> GetScalarAsync<TData, TModel>(
 			string sql,
 			object? parameters,
-			Func<TData, TModel> mapper,
+			Func<TData?, TModel> mapper,
 			IDbTransaction? transaction = null,
 			CancellationToken cancellationToken = default) {
 			var result = await conn.ExecuteScalarAsync<TData>(new CommandDefinition(
@@ -279,7 +279,7 @@ public static class DbConnectionExtensions {
 				parameters,
 				transaction: transaction,
 				cancellationToken: cancellationToken));
-			return mapper(result!);
+			return Result.FromNullable(mapper(result), new InvalidOperationException("Mapper returned null."));
 		}
 
 		#endregion
@@ -1329,7 +1329,7 @@ public static class DbConnectionExtensions {
 		/// <param name="action">A function that receives a <see cref="TransactionContext"/> and returns a <see cref="Result"/>.</param>
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>The result of the operation. The transaction is committed on success, rolled back on failure.</returns>
-		public async Task<Result> ExecuteInTransactionAsync(
+		public async Task<Result> ExecuteTransactionAsync(
 			Func<TransactionContext, Task<Result>> action,
 			CancellationToken cancellationToken = default) {
 
@@ -1381,7 +1381,7 @@ public static class DbConnectionExtensions {
 		/// <param name="action">A function that receives a <see cref="TransactionContext"/> and returns a <see cref="Result{T}"/>.</param>
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>The result of the operation. The transaction is committed on success, rolled back on failure.</returns>
-		public async Task<Result<T>> ExecuteInTransactionAsync<T>(
+		public async Task<Result<T>> ExecuteTransactionAsync<T>(
 			Func<TransactionContext, Task<Result<T>>> action,
 			CancellationToken cancellationToken = default) {
 

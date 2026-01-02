@@ -175,7 +175,7 @@ public sealed class SqliteIntegrationTests {
 			new { Id = userId, Name = "Test", Email = "test@test.com" });
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync<UserDto>(db =>
+		var result = await conn.ExecuteTransactionAsync<UserDto>(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -196,7 +196,7 @@ public sealed class SqliteIntegrationTests {
 			new { Id = Guid.NewGuid().ToString(), Name = "Test", Email = "test@test.com" });
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync(async db => {
+		var result = await conn.ExecuteTransactionAsync(async db => {
 			return await db.GetScalarAsync<long>("SELECT COUNT(*) FROM Users");
 		}, this.TestContext.CancellationToken);
 
@@ -216,7 +216,7 @@ public sealed class SqliteIntegrationTests {
 			new { Id = Guid.NewGuid().ToString(), Name = "User2", Email = "user2@test.com" });
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync(async db => {
+		var result = await conn.ExecuteTransactionAsync(async db => {
 			return await db.QueryAnyAsync<UserDto>("SELECT Id, Name, Email FROM Users");
 		}, this.TestContext.CancellationToken);
 
@@ -239,7 +239,7 @@ public sealed class SqliteIntegrationTests {
 			new { Id = userId, Name = "John", Email = "john@test.com" });
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync<User>(db =>
+		var result = await conn.ExecuteTransactionAsync<User>(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -262,7 +262,7 @@ public sealed class SqliteIntegrationTests {
 			new { Id = userId, Name = "ValidUser", Email = "valid@test.com" });
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync<UserDto>(db =>
+		var result = await conn.ExecuteTransactionAsync<UserDto>(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -286,7 +286,7 @@ public sealed class SqliteIntegrationTests {
 		var expectedError = new BadRequestException("User must start with 'Valid'");
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync<UserDto>(db =>
+		var result = await conn.ExecuteTransactionAsync<UserDto>(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -313,7 +313,7 @@ public sealed class SqliteIntegrationTests {
 			new { Id = Guid.NewGuid().ToString(), UserId = userId, Amount = 200.0 });
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync<long>(db =>
+		var result = await conn.ExecuteTransactionAsync<long>(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -342,7 +342,7 @@ public sealed class SqliteIntegrationTests {
 			new { Id = Guid.NewGuid().ToString(), UserId = userId, Amount = 200.0 });
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync<IReadOnlyList<OrderDto>>(db =>
+		var result = await conn.ExecuteTransactionAsync<IReadOnlyList<OrderDto>>(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -367,7 +367,7 @@ public sealed class SqliteIntegrationTests {
 		var scalarExecuted = false;
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync<long>(db =>
+		var result = await conn.ExecuteTransactionAsync<long>(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = "nonexistent" },
@@ -398,7 +398,7 @@ public sealed class SqliteIntegrationTests {
 			new { Id = user2Id, Name = "User2", Email = "user2@test.com" });
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync<UserDto>(db =>
+		var result = await conn.ExecuteTransactionAsync<UserDto>(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = user1Id },
@@ -430,7 +430,7 @@ public sealed class SqliteIntegrationTests {
 		var orderId = Guid.NewGuid().ToString();
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync(db =>
+		var result = await conn.ExecuteTransactionAsync(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -458,7 +458,7 @@ public sealed class SqliteIntegrationTests {
 		var orderId = Guid.NewGuid().ToString();
 
 		// Act - use the fetched user's ID in the insert
-		var result = await conn.ExecuteInTransactionAsync(db =>
+		var result = await conn.ExecuteTransactionAsync(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -490,7 +490,7 @@ public sealed class SqliteIntegrationTests {
 		var orderId = Guid.NewGuid().ToString();
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync<string>(db =>
+		var result = await conn.ExecuteTransactionAsync<string>(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -518,7 +518,7 @@ public sealed class SqliteIntegrationTests {
 		var orderId = Guid.NewGuid().ToString();
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync<(string OrderId, string UserName)>(db =>
+		var result = await conn.ExecuteTransactionAsync<(string OrderId, string UserName)>(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -547,7 +547,7 @@ public sealed class SqliteIntegrationTests {
 		var orderId = Guid.NewGuid().ToString();
 
 		// Act - Insert returns DbResultNonGeneric, then chain to ThenGetScalarAsync
-		var result = await conn.ExecuteInTransactionAsync<long>(db =>
+		var result = await conn.ExecuteTransactionAsync<long>(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -576,7 +576,7 @@ public sealed class SqliteIntegrationTests {
 		var orderId2 = Guid.NewGuid().ToString();
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync(db =>
+		var result = await conn.ExecuteTransactionAsync(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -605,7 +605,7 @@ public sealed class SqliteIntegrationTests {
 			new { Id = userId, Name = "John", Email = "john@test.com" });
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync(db =>
+		var result = await conn.ExecuteTransactionAsync(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -632,7 +632,7 @@ public sealed class SqliteIntegrationTests {
 			new { Id = userId, Name = "John", Email = "john@test.com" });
 
 		// Act - update based on fetched user
-		var result = await conn.ExecuteInTransactionAsync(db =>
+		var result = await conn.ExecuteTransactionAsync(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -659,7 +659,7 @@ public sealed class SqliteIntegrationTests {
 			new { Id = userId, Name = "John", Email = "john@test.com" });
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync<string>(db =>
+		var result = await conn.ExecuteTransactionAsync<string>(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -686,7 +686,7 @@ public sealed class SqliteIntegrationTests {
 			new { Id = userId, Name = "John", Email = "john@test.com" });
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync(db =>
+		var result = await conn.ExecuteTransactionAsync(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -713,7 +713,7 @@ public sealed class SqliteIntegrationTests {
 			new { Id = userId, Name = "John", Email = "john@test.com" });
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync(db =>
+		var result = await conn.ExecuteTransactionAsync(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -738,7 +738,7 @@ public sealed class SqliteIntegrationTests {
 		var insertExecuted = false;
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync(db =>
+		var result = await conn.ExecuteTransactionAsync(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = "nonexistent" },
@@ -769,7 +769,7 @@ public sealed class SqliteIntegrationTests {
 		var orderId = Guid.NewGuid().ToString();
 
 		// Act - Complex chain: Get user -> Insert order -> Update user -> Get count
-		var result = await conn.ExecuteInTransactionAsync<long>(db =>
+		var result = await conn.ExecuteTransactionAsync<long>(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -804,7 +804,7 @@ public sealed class SqliteIntegrationTests {
 		var orderId2 = Guid.NewGuid().ToString();
 
 		// Act - Insert returning non-generic, then insert returning generic
-		var result = await conn.ExecuteInTransactionAsync<string>(db =>
+		var result = await conn.ExecuteTransactionAsync<string>(db =>
 			db.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -835,7 +835,7 @@ public sealed class SqliteIntegrationTests {
 		var userId = Guid.NewGuid().ToString();
 
 		// Act - Start with InsertAsync directly on TransactionBuilder, then chain UpdateAsync
-		var result = await conn.ExecuteInTransactionAsync(db =>
+		var result = await conn.ExecuteTransactionAsync(db =>
 			db.InsertAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" })
@@ -860,7 +860,7 @@ public sealed class SqliteIntegrationTests {
 		var orderId = Guid.NewGuid().ToString();
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync(db =>
+		var result = await conn.ExecuteTransactionAsync(db =>
 			db.InsertAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" })
@@ -885,7 +885,7 @@ public sealed class SqliteIntegrationTests {
 		var userId = Guid.NewGuid().ToString();
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync<UserDto>(db =>
+		var result = await conn.ExecuteTransactionAsync<UserDto>(db =>
 			db.InsertAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" })
@@ -909,7 +909,7 @@ public sealed class SqliteIntegrationTests {
 		var userId = Guid.NewGuid().ToString();
 
 		// Act - InsertAsync<T> returns DbResult<T>, then chain to ThenUpdateAsync
-		var result = await conn.ExecuteInTransactionAsync(db =>
+		var result = await conn.ExecuteTransactionAsync(db =>
 			db.InsertAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" },
@@ -936,7 +936,7 @@ public sealed class SqliteIntegrationTests {
 			new { Id = userId, Name = "John", Email = "john@test.com" });
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync(db =>
+		var result = await conn.ExecuteTransactionAsync(db =>
 			db.UpdateAsync(
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				new { Id = userId, Name = "Jane" },
@@ -964,7 +964,7 @@ public sealed class SqliteIntegrationTests {
 			new { Id = oldUserId, Name = "OldUser", Email = "old@test.com" });
 
 		// Act
-		var result = await conn.ExecuteInTransactionAsync(db =>
+		var result = await conn.ExecuteTransactionAsync(db =>
 			db.DeleteAsync(
 				"DELETE FROM Users WHERE Id = @Id",
 				new { Id = oldUserId },
@@ -991,7 +991,7 @@ public sealed class SqliteIntegrationTests {
 		var orderId = Guid.NewGuid().ToString();
 
 		// Act - Complex chain starting from InsertAsync
-		var result = await conn.ExecuteInTransactionAsync<long>(db =>
+		var result = await conn.ExecuteTransactionAsync<long>(db =>
 			db.InsertAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" })
@@ -1024,7 +1024,7 @@ public sealed class SqliteIntegrationTests {
 		var userId = Guid.NewGuid().ToString();
 
 		// Act: Insert -> Get (using parametersFactory) -> Update (using parametersFactory)
-		var result = await conn.ExecuteInTransactionAsync(db =>
+		var result = await conn.ExecuteTransactionAsync(db =>
 			db.InsertAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" },
@@ -1054,7 +1054,7 @@ public sealed class SqliteIntegrationTests {
 		var orderId = Guid.NewGuid().ToString();
 
 		// Act: Insert user -> Get scalar count -> Insert order using count in amount
-		var result = await conn.ExecuteInTransactionAsync<string>(db =>
+		var result = await conn.ExecuteTransactionAsync<string>(db =>
 			db.InsertAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" },
@@ -1083,7 +1083,7 @@ public sealed class SqliteIntegrationTests {
 		var userId = Guid.NewGuid().ToString();
 
 		// Act: Insert -> Where (validate) -> Update
-		var result = await conn.ExecuteInTransactionAsync(db =>
+		var result = await conn.ExecuteTransactionAsync(db =>
 			db.InsertAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" },
@@ -1109,7 +1109,7 @@ public sealed class SqliteIntegrationTests {
 		var userId = Guid.NewGuid().ToString();
 
 		// Act: Insert -> Where (fails) -> Update (should be skipped)
-		var result = await conn.ExecuteInTransactionAsync(db =>
+		var result = await conn.ExecuteTransactionAsync(db =>
 			db.InsertAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "invalid-email" },
@@ -1142,7 +1142,7 @@ public sealed class SqliteIntegrationTests {
 			new { Id = userId2, Name = "Jane", Email = "jane@test.com" });
 
 		// Act: Update -> Get -> Delete -> QueryAny
-		var result = await conn.ExecuteInTransactionAsync<IReadOnlyList<UserDto>>(db =>
+		var result = await conn.ExecuteTransactionAsync<IReadOnlyList<UserDto>>(db =>
 			db.UpdateAsync(
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				new { Id = userId1, Name = "John Updated" },
@@ -1178,7 +1178,7 @@ public sealed class SqliteIntegrationTests {
 			new { Id = "existing-user", Name = "Existing", Email = "existing@test.com" });
 
 		// Act: Insert new user -> QueryAny all users -> Insert order for first user
-		var result = await conn.ExecuteInTransactionAsync(db =>
+		var result = await conn.ExecuteTransactionAsync(db =>
 			db.InsertAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "New User", Email = "new@test.com" },
@@ -1210,7 +1210,7 @@ public sealed class SqliteIntegrationTests {
 			new { Id = userId2, Name = "ToKeep", Email = "keep@test.com" });
 
 		// Act: Delete -> GetScalar (remaining count) -> Update remaining user's name with count
-		var result = await conn.ExecuteInTransactionAsync(db =>
+		var result = await conn.ExecuteTransactionAsync(db =>
 			db.DeleteAsync(
 				"DELETE FROM Users WHERE Id = @Id",
 				new { Id = userId1 },
@@ -1236,7 +1236,7 @@ public sealed class SqliteIntegrationTests {
 		var userId = Guid.NewGuid().ToString();
 
 		// Act: Insert -> Map to uppercase name -> Update with mapped value
-		var result = await conn.ExecuteInTransactionAsync(db =>
+		var result = await conn.ExecuteTransactionAsync(db =>
 			db.InsertAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "john doe", Email = "john@test.com" },
@@ -1263,7 +1263,7 @@ public sealed class SqliteIntegrationTests {
 		var orderId = Guid.NewGuid().ToString();
 
 		// Act: Insert user -> Get user -> Insert order -> Get order
-		var result = await conn.ExecuteInTransactionAsync<OrderDto>(db =>
+		var result = await conn.ExecuteTransactionAsync<OrderDto>(db =>
 			db.InsertAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" },
@@ -1305,7 +1305,7 @@ public sealed class SqliteIntegrationTests {
 			new { Id = userId3, Name = "Active2", Email = "active2@test.com" });
 
 		// Act: Update one -> Query all -> Delete based on query (delete the first active)
-		var result = await conn.ExecuteInTransactionAsync(db =>
+		var result = await conn.ExecuteTransactionAsync(db =>
 			db.UpdateAsync(
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				new { Id = userId2, Name = "StillInactive" },
@@ -1338,7 +1338,7 @@ public sealed class SqliteIntegrationTests {
 		var userId = Guid.NewGuid().ToString();
 
 		// Act: Insert -> GetScalar (count before) -> Update -> GetScalar (count after, should be same)
-		var result = await conn.ExecuteInTransactionAsync<long>(db =>
+		var result = await conn.ExecuteTransactionAsync<long>(db =>
 			db.InsertAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "CountTest", Email = "count@test.com" },
@@ -1361,6 +1361,233 @@ public sealed class SqliteIntegrationTests {
 		Assert.AreEqual(1L, result.Value); // Still 1 user
 		var name = conn.ExecuteScalar<string>("SELECT Name FROM Users WHERE Id = @Id", new { Id = userId });
 		Assert.AreEqual("User #1", name);
+	}
+
+	#endregion
+
+	#region GetScalarAsync Null Handling
+
+	[TestMethod]
+	public async Task GetScalarAsync_WhenSqlReturnsNull_ReturnsFailureWithInvalidOperationException() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		// No users inserted, so MAX will return NULL
+
+		// Act
+		var result = await conn.GetScalarAsync<string>(
+			"SELECT MAX(Name) FROM Users",
+			cancellationToken: this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsFailure);
+		Assert.IsInstanceOfType<InvalidOperationException>(result.Error);
+		Assert.Contains("null", result.Error.Message.ToLowerInvariant());
+	}
+
+	[TestMethod]
+	public async Task GetScalarAsync_WhenSqlReturnsNullableColumnWithValue_ReturnsSuccess() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = Guid.NewGuid().ToString(), Name = "John", Email = "john@test.com" });
+
+		// Act
+		var result = await conn.GetScalarAsync<string>(
+			"SELECT MAX(Name) FROM Users",
+			cancellationToken: this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		Assert.AreEqual("John", result.Value);
+	}
+
+	[TestMethod]
+	public async Task GetScalarAsync_WithCoalesceForNullColumn_ReturnsDefaultValue() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		// No users, MAX returns NULL, but COALESCE provides default
+
+		// Act
+		var result = await conn.GetScalarAsync<string>(
+			"SELECT COALESCE(MAX(Name), 'No Users') FROM Users",
+			cancellationToken: this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		Assert.AreEqual("No Users", result.Value);
+	}
+
+	[TestMethod]
+	public async Task GetScalarAsync_WithMapper_WhenSqlReturnsNull_MapperReceivesNull() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		// No users, MAX returns NULL
+		var receivedValue = "not-null-sentinel";
+
+		// Act
+		var result = await conn.GetScalarAsync<string?, string>(
+			"SELECT MAX(Name) FROM Users",
+			value => {
+				receivedValue = value;
+				return value ?? "Default";
+			},
+			cancellationToken: this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		Assert.IsNull(receivedValue, "Mapper should receive null when SQL returns NULL");
+		Assert.AreEqual("Default", result.Value);
+	}
+
+	[TestMethod]
+	public async Task GetScalarAsync_WithMapper_WhenMapperReturnsNull_ReturnsFailure() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = Guid.NewGuid().ToString(), Name = "John", Email = "john@test.com" });
+
+		// Act
+		var result = await conn.GetScalarAsync<string?, string?>(
+			"SELECT MAX(Name) FROM Users",
+			_ => null!, // Mapper intentionally returns null
+			cancellationToken: this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsFailure);
+		Assert.IsInstanceOfType<InvalidOperationException>(result.Error);
+		Assert.Contains("mapper", result.Error.Message.ToLowerInvariant());
+	}
+
+	[TestMethod]
+	public async Task GetScalarAsync_WithMapper_WhenSqlReturnsValue_MapperTransformsIt() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = Guid.NewGuid().ToString(), Name = "John", Email = "john@test.com" });
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = Guid.NewGuid().ToString(), Name = "Jane", Email = "jane@test.com" });
+
+		// Act
+		var result = await conn.GetScalarAsync<long, string>(
+			"SELECT COUNT(*) FROM Users",
+			count => $"Total users: {count}",
+			cancellationToken: this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		Assert.AreEqual("Total users: 2", result.Value);
+	}
+
+	[TestMethod]
+	public async Task GetScalarAsync_WithMapperAndParameters_WhenSqlReturnsNull_MapperReceivesNull() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		// Query for non-existent user, MAX returns NULL
+
+		// Act
+		var result = await conn.GetScalarAsync<string?, string>(
+			"SELECT MAX(Name) FROM Users WHERE Id = @Id",
+			new { Id = "nonexistent" },
+			value => value ?? "Not Found",
+			cancellationToken: this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		Assert.AreEqual("Not Found", result.Value);
+	}
+
+	#endregion
+
+	#region GetScalarAsync Null Handling in Transactions
+
+	[TestMethod]
+	public async Task TransactionContext_GetScalarAsync_WhenSqlReturnsNull_ReturnsFailure() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+
+		// Act
+		var result = await conn.ExecuteTransactionAsync<string>(db =>
+			db.GetScalarAsync<string>("SELECT MAX(Name) FROM Users")
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsFailure);
+		Assert.IsInstanceOfType<InvalidOperationException>(result.Error);
+	}
+
+	[TestMethod]
+	public async Task TransactionContext_GetScalarAsync_WithMapper_MapperReceivesNull() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+
+		// Act
+		var result = await conn.ExecuteTransactionAsync<string>(db =>
+			db.GetScalarAsync<string?, string>(
+				"SELECT MAX(Name) FROM Users",
+				value => value ?? "Empty Table")
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		Assert.AreEqual("Empty Table", result.Value);
+	}
+
+	[TestMethod]
+	public async Task FluentChaining_ThenGetScalarAsync_WhenSqlReturnsNull_PropagatesFailure() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+
+		// Act - Get user, then try to get MAX of a non-existent related table data
+		var result = await conn.ExecuteTransactionAsync<string>(db =>
+			db.GetAsync<UserDto>(
+				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+				new { Id = userId },
+				userId)
+			.ThenGetScalarAsync<string>(
+				"SELECT MAX(Name) FROM Users WHERE Id = 'nonexistent'") // Returns NULL
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsFailure);
+		Assert.IsInstanceOfType<InvalidOperationException>(result.Error);
+	}
+
+	[TestMethod]
+	public async Task FluentChaining_ThenGetScalarAsync_WithMapper_HandlesNull() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+
+		// Act
+		var result = await conn.ExecuteTransactionAsync<string>(db =>
+			db.GetAsync<UserDto>(
+				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+				new { Id = userId },
+				userId)
+			.ThenGetScalarAsync<string?, string>(
+				"SELECT MAX(Name) FROM Users WHERE Id = 'nonexistent'",
+				value => value ?? "No matching users")
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		Assert.AreEqual("No matching users", result.Value);
 	}
 
 	#endregion

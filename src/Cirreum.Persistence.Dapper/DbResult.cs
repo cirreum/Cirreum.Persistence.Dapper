@@ -277,13 +277,13 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 	/// <summary>
 	/// Chains a GET scalar operation with mapping after a successful result.
 	/// </summary>
-	public DbResult<TModel> ThenGetScalarAsync<TData, TModel>(string sql, Func<TData, TModel> mapper)
+	public DbResult<TModel> ThenGetScalarAsync<TData, TModel>(string sql, Func<TData?, TModel> mapper)
 		=> new(builder, this.ThenGetScalarAsyncCore(sql, null, mapper));
 
 	/// <summary>
 	/// Chains a GET scalar operation with parameters and mapping after a successful result.
 	/// </summary>
-	public DbResult<TModel> ThenGetScalarAsync<TData, TModel>(string sql, object? parameters, Func<TData, TModel> mapper)
+	public DbResult<TModel> ThenGetScalarAsync<TData, TModel>(string sql, object? parameters, Func<TData?, TModel> mapper)
 		=> new(builder, this.ThenGetScalarAsyncCore(sql, parameters, mapper));
 
 	private async Task<Result<TResult>> ThenGetScalarAsyncCore<TResult>(string sql, object? parameters) {
@@ -295,7 +295,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 		return await builder.GetScalarAsync<TResult>(sql, parameters).Result.ConfigureAwait(false);
 	}
 
-	private async Task<Result<TModel>> ThenGetScalarAsyncCore<TData, TModel>(string sql, object? parameters, Func<TData, TModel> mapper) {
+	private async Task<Result<TModel>> ThenGetScalarAsyncCore<TData, TModel>(string sql, object? parameters, Func<TData?, TModel> mapper) {
 		var result = await resultTask.ConfigureAwait(false);
 		if (result.IsFailure) {
 			return result.Error!;
