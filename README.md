@@ -10,7 +10,7 @@
 
 ## Overview
 
-**Cirreum.Persistence.Dapper** provides a streamlined SQL Server database connection factory using Dapper. Built to integrate seamlessly with the Cirreum Foundation Framework, it offers flexible authentication options including Azure AD (Entra ID) support for modern cloud-native applications.
+**Cirreum.Persistence.Dapper** provides a streamlined SQL Server database connection factory using Dapper. Built to integrate seamlessly with the Cirreum Foundation Framework, it offers flexible authentication options including Azure Entra ID support for modern cloud-native applications.
 
 The library includes Result-oriented extension methods for common data access patterns, including pagination, cursor-based queries, and automatic SQL constraint violation handling.
 
@@ -129,7 +129,7 @@ public async Task<Result<CursorResult<Order>>> GetOrdersCursorAsync(
 
 ### Slice Queries (SliceResult)
 
-For "preview with expand" scenarios � load an initial batch and indicate if more exist. Not for pagination.
+For "preview with expand" scenarios - load an initial batch and indicate if more exist. Not for pagination.
 ```csharp
 public async Task<Result<SliceResult<Order>>> GetRecentOrdersAsync(
     Guid customerId, CancellationToken ct)
@@ -235,6 +235,12 @@ public async Task<Result> DeleteOrderAsync(Guid orderId, CancellationToken ct)
 
 Chain multiple database operations in a single transaction with railway-oriented error handling. If any operation fails, subsequent operations are skipped and the error propagates.
 
+The library provides two result wrapper types that enable fluent chaining within transactions:
+- **`DbResult`** - Non-generic result for operations that don't return a value
+- **`DbResult<T>`** - Generic result that carries a value through the chain
+
+These types wrap `Result`/`Result<T>` along with the `TransactionContext`, enabling method chaining while preserving transaction scope. They function similarly to a Reader monad, threading the transaction context through each operation.
+
 ### Basic Chaining
 ```csharp
 public async Task<Result<OrderDto>> CreateOrderWithItemsAsync(
@@ -242,8 +248,8 @@ public async Task<Result<OrderDto>> CreateOrderWithItemsAsync(
 {
     await using var conn = await db.CreateConnectionAsync(ct);
 
-    return await conn.ExecuteInTransactionAsync(db =>
-        db.GetAsync<CustomerDto>(
+    return await conn.ExecuteTransactionAsync(ctx =>
+        ctx.GetAsync<CustomerDto>(
             "SELECT * FROM Customers WHERE CustomerId = @Id",
             new { Id = command.CustomerId },
             key: command.CustomerId)
@@ -267,15 +273,17 @@ public async Task<Result<OrderDto>> CreateOrderWithItemsAsync(
 - `ThenAsync(Func<T, Task<Result<TResult>>>)` - Execute and transform
 - `ThenGetAsync<TResult>(...)` - Query single record
 - `ThenGetScalarAsync<TResult>(...)` - Query scalar value
+- `ThenQueryAnyAsync<TResult>(...)` - Query collection
 - `ThenInsertAsync(...)` - Insert with optional result selector
 - `ThenUpdateAsync(...)` - Update with optional result selector
 - `ThenDeleteAsync(...)` - Delete record
 
-**From `DbResultNonGeneric` (void result):**
+**From `DbResult` (void result):**
 - `ThenAsync(Func<Task<Result>>)` - Chain another non-generic operation
 - `ThenAsync(Func<Task<Result<TResult>>>)` - Chain and produce typed result
 - `ThenGetAsync<TResult>(...)` - Query single record
 - `ThenGetScalarAsync<TResult>(...)` - Query scalar value
+- `ThenQueryAnyAsync<TResult>(...)` - Query collection
 - `ThenInsertAsync(...)` - Insert with optional result selector
 - `ThenUpdateAsync(...)` - Update with optional result selector
 - `ThenDeleteAsync(...)` - Delete record
@@ -298,8 +306,8 @@ Use result selectors to return values from Insert/Update operations:
 ```csharp
 var orderId = Guid.CreateVersion7();
 
-return await conn.ExecuteInTransactionAsync(db =>
-    db.InsertAsync(
+return await conn.ExecuteTransactionAsync(ctx =>
+    ctx.InsertAsync(
         "INSERT INTO Orders (...) VALUES (...)",
         new { OrderId = orderId, ... },
         () => orderId)  // Returns the new order ID
@@ -315,12 +323,79 @@ return await conn.ExecuteInTransactionAsync(db =>
 Failures propagate without executing subsequent operations:
 
 ```csharp
-await conn.ExecuteInTransactionAsync(db =>
-    db.GetAsync<CustomerDto>(...)          // Returns NotFound
+await conn.ExecuteTransactionAsync(ctx =>
+    ctx.GetAsync<CustomerDto>(...)         // Returns NotFound
     .ThenInsertAsync(...)                  // Skipped
     .ThenUpdateAsync(...)                  // Skipped
     .ThenGetAsync<OrderDto>(...)           // Skipped - returns original NotFound
 , ct);
+```
+
+## Factory Extensions
+
+For simple operations, `IDbConnectionFactory` provides extension methods that handle connection management automatically, reducing boilerplate:
+
+```csharp
+// Instead of this...
+await using var conn = await db.CreateConnectionAsync(ct);
+return await conn.GetAsync<OrderDto>(sql, parameters, key, ct);
+
+// You can write this...
+return await db.GetAsync<OrderDto>(sql, parameters, key, ct);
+```
+
+### Available Factory Extensions
+
+| Method | Description |
+|--------|-------------|
+| `ExecuteAsync(action)` | Execute custom action with managed connection |
+| `ExecuteTransactionAsync(action)` | Execute transaction with managed connection |
+| `GetAsync<T>(...)` | Query single record |
+| `GetScalarAsync<T>(...)` | Query scalar value |
+| `QueryAnyAsync<T>(...)` | Query collection |
+| `InsertAsync(...)` | Insert record |
+| `UpdateAsync(...)` | Update record |
+| `DeleteAsync(...)` | Delete record |
+
+All factory extensions capture exceptions and convert them to `Result` failures, ensuring consistent error handling.
+
+### Example Usage
+
+```csharp
+public class OrderRepository(IDbConnectionFactory db)
+{
+    public Task<Result<OrderDto>> GetOrderAsync(Guid orderId, CancellationToken ct)
+        => db.GetAsync<OrderDto>(
+            "SELECT * FROM Orders WHERE OrderId = @Id",
+            new { Id = orderId },
+            orderId,
+            ct);
+
+    public Task<Result<Guid>> CreateOrderAsync(CreateOrder cmd, CancellationToken ct)
+    {
+        var orderId = Guid.CreateVersion7();
+        return db.InsertAsync(
+            "INSERT INTO Orders (OrderId, CustomerId, Amount) VALUES (@OrderId, @CustomerId, @Amount)",
+            new { OrderId = orderId, cmd.CustomerId, cmd.Amount },
+            () => orderId,
+            ct);
+    }
+
+    public Task<Result<OrderDto>> CreateOrderWithValidationAsync(CreateOrder cmd, CancellationToken ct)
+        => db.ExecuteTransactionAsync(ctx =>
+            ctx.GetAsync<CustomerDto>(
+                "SELECT * FROM Customers WHERE CustomerId = @Id",
+                new { Id = cmd.CustomerId },
+                cmd.CustomerId)
+            .WhereAsync(
+                c => c.IsActive,
+                new BadRequestException("Customer is not active"))
+            .ThenInsertAsync(
+                "INSERT INTO Orders (...) VALUES (...)",
+                c => new { OrderId = Guid.CreateVersion7(), c.CustomerId, cmd.Amount },
+                () => new OrderDto(...))
+        , ct);
+}
 ```
 
 ## Configuration
