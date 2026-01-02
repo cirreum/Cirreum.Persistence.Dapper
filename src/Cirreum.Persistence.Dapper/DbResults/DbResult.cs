@@ -112,12 +112,12 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 	/// <param name="resultSelector">Factory to create the result value after successful insert.</param>
 	/// <param name="uniqueConstraintMessage">Error message for unique constraint violations.</param>
 	/// <param name="foreignKeyMessage">Error message for foreign key violations.</param>
-	public DbResult<T> ThenInsertAsync<T>(
+	public DbResult<T> ThenInsertAndReturnAsync<T>(
 		string sql,
 		Func<T> resultSelector,
 		string uniqueConstraintMessage = "Record already exists",
 		string? foreignKeyMessage = "Referenced record does not exist")
-		=> new(builder, this.ThenInsertAsyncCore(sql, resultSelector, uniqueConstraintMessage, foreignKeyMessage));
+		=> new(builder, this.ThenInsertAndReturnAsyncCore(sql, resultSelector, uniqueConstraintMessage, foreignKeyMessage));
 
 	/// <summary>
 	/// Chains an INSERT operation that returns a value after a successful result.
@@ -127,13 +127,13 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 	/// <param name="resultSelector">Factory to create the result value after successful insert.</param>
 	/// <param name="uniqueConstraintMessage">Error message for unique constraint violations.</param>
 	/// <param name="foreignKeyMessage">Error message for foreign key violations.</param>
-	public DbResult<T> ThenInsertAsync<T>(
+	public DbResult<T> ThenInsertAndReturnAsync<T>(
 		string sql,
 		object parameters,
 		Func<T> resultSelector,
 		string uniqueConstraintMessage = "Record already exists",
 		string? foreignKeyMessage = "Referenced record does not exist")
-		=> new(builder, this.ThenInsertAsyncCore(sql, parameters, resultSelector, uniqueConstraintMessage, foreignKeyMessage));
+		=> new(builder, this.ThenInsertAndReturnAsyncCore(sql, parameters, resultSelector, uniqueConstraintMessage, foreignKeyMessage));
 
 	/// <summary>
 	/// Conditionally chains an INSERT operation after a successful result.
@@ -176,13 +176,13 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 	/// <param name="when">Predicate that determines whether to execute the insert.</param>
 	/// <param name="uniqueConstraintMessage">Error message for unique constraint violations.</param>
 	/// <param name="foreignKeyMessage">Error message for foreign key violations.</param>
-	public DbResult<T> ThenInsertIfAsync<T>(
+	public DbResult<T> ThenInsertIfAndReturnAsync<T>(
 		string sql,
 		Func<T> resultSelector,
 		Func<bool> when,
 		string uniqueConstraintMessage = "Record already exists",
 		string? foreignKeyMessage = "Referenced record does not exist")
-		=> new(builder, this.ThenInsertIfAsyncCore(sql, resultSelector, when, uniqueConstraintMessage, foreignKeyMessage));
+		=> new(builder, this.ThenInsertIfAndReturnAsyncCore(sql, resultSelector, when, uniqueConstraintMessage, foreignKeyMessage));
 
 	/// <summary>
 	/// Conditionally chains an INSERT operation that returns a value after a successful result.
@@ -194,14 +194,14 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 	/// <param name="when">Predicate that determines whether to execute the insert.</param>
 	/// <param name="uniqueConstraintMessage">Error message for unique constraint violations.</param>
 	/// <param name="foreignKeyMessage">Error message for foreign key violations.</param>
-	public DbResult<T> ThenInsertIfAsync<T>(
+	public DbResult<T> ThenInsertIfAndReturnAsync<T>(
 		string sql,
 		object parameters,
 		Func<T> resultSelector,
 		Func<bool> when,
 		string uniqueConstraintMessage = "Record already exists",
 		string? foreignKeyMessage = "Referenced record does not exist")
-		=> new(builder, this.ThenInsertIfAsyncCore(sql, parameters, resultSelector, when, uniqueConstraintMessage, foreignKeyMessage));
+		=> new(builder, this.ThenInsertIfAndReturnAsyncCore(sql, parameters, resultSelector, when, uniqueConstraintMessage, foreignKeyMessage));
 
 	private async Task<Result> ThenInsertAsyncCore(
 		string sql,
@@ -226,7 +226,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 		return await builder.InsertAsync(sql, parameters, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
 	}
 
-	private async Task<Result<T>> ThenInsertAsyncCore<T>(
+	private async Task<Result<T>> ThenInsertAndReturnAsyncCore<T>(
 		string sql,
 		Func<T> resultSelector,
 		string uniqueConstraintMessage,
@@ -235,10 +235,10 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 		if (result.IsFailure) {
 			return result.Error;
 		}
-		return await builder.InsertAsync(sql, resultSelector, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
+		return await builder.InsertAndReturnAsync(sql, resultSelector, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
 	}
 
-	private async Task<Result<T>> ThenInsertAsyncCore<T>(
+	private async Task<Result<T>> ThenInsertAndReturnAsyncCore<T>(
 		string sql,
 		object parameters,
 		Func<T> resultSelector,
@@ -248,7 +248,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 		if (result.IsFailure) {
 			return result.Error;
 		}
-		return await builder.InsertAsync(sql, parameters, resultSelector, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
+		return await builder.InsertAndReturnAsync(sql, parameters, resultSelector, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
 	}
 
 	private async Task<Result> ThenInsertIfAsyncCore(
@@ -282,7 +282,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 		return await builder.InsertAsync(sql, parameters, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
 	}
 
-	private async Task<Result<T>> ThenInsertIfAsyncCore<T>(
+	private async Task<Result<T>> ThenInsertIfAndReturnAsyncCore<T>(
 		string sql,
 		Func<T> resultSelector,
 		Func<bool> when,
@@ -295,10 +295,10 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 		if (!when()) {
 			return resultSelector();
 		}
-		return await builder.InsertAsync(sql, resultSelector, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
+		return await builder.InsertAndReturnAsync(sql, resultSelector, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
 	}
 
-	private async Task<Result<T>> ThenInsertIfAsyncCore<T>(
+	private async Task<Result<T>> ThenInsertIfAndReturnAsyncCore<T>(
 		string sql,
 		object parameters,
 		Func<T> resultSelector,
@@ -312,7 +312,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 		if (!when()) {
 			return resultSelector();
 		}
-		return await builder.InsertAsync(sql, parameters, resultSelector, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
+		return await builder.InsertAndReturnAsync(sql, parameters, resultSelector, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
 	}
 
 	#endregion
@@ -344,14 +344,14 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 	/// <param name="resultSelector">Factory to create the result value after successful update.</param>
 	/// <param name="uniqueConstraintMessage">Error message for unique constraint violations.</param>
 	/// <param name="foreignKeyMessage">Error message for foreign key violations.</param>
-	public DbResult<T> ThenUpdateAsync<T>(
+	public DbResult<T> ThenUpdateAndReturnAsync<T>(
 		string sql,
 		object? parameters,
 		object key,
 		Func<T> resultSelector,
 		string uniqueConstraintMessage = "Record already exists",
 		string? foreignKeyMessage = "Referenced record does not exist")
-		=> new(builder, this.ThenUpdateAsyncCore(sql, parameters, key, resultSelector, uniqueConstraintMessage, foreignKeyMessage));
+		=> new(builder, this.ThenUpdateAndReturnAsyncCore(sql, parameters, key, resultSelector, uniqueConstraintMessage, foreignKeyMessage));
 
 	/// <summary>
 	/// Conditionally chains an UPDATE operation after a successful result.
@@ -383,7 +383,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 	/// <param name="when">Predicate that determines whether to execute the update.</param>
 	/// <param name="uniqueConstraintMessage">Error message for unique constraint violations.</param>
 	/// <param name="foreignKeyMessage">Error message for foreign key violations.</param>
-	public DbResult<T> ThenUpdateIfAsync<T>(
+	public DbResult<T> ThenUpdateIfAndReturnAsync<T>(
 		string sql,
 		object? parameters,
 		object key,
@@ -391,7 +391,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 		Func<bool> when,
 		string uniqueConstraintMessage = "Record already exists",
 		string? foreignKeyMessage = "Referenced record does not exist")
-		=> new(builder, this.ThenUpdateIfAsyncCore(sql, parameters, key, resultSelector, when, uniqueConstraintMessage, foreignKeyMessage));
+		=> new(builder, this.ThenUpdateIfAndReturnAsyncCore(sql, parameters, key, resultSelector, when, uniqueConstraintMessage, foreignKeyMessage));
 
 	private async Task<Result> ThenUpdateAsyncCore(
 		string sql,
@@ -406,7 +406,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 		return await builder.UpdateAsync(sql, parameters, key, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
 	}
 
-	private async Task<Result<T>> ThenUpdateAsyncCore<T>(
+	private async Task<Result<T>> ThenUpdateAndReturnAsyncCore<T>(
 		string sql,
 		object? parameters,
 		object key,
@@ -417,7 +417,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 		if (result.IsFailure) {
 			return result.Error;
 		}
-		return await builder.UpdateAsync(sql, parameters, key, resultSelector, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
+		return await builder.UpdateAndReturnAsync(sql, parameters, key, resultSelector, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
 	}
 
 	private async Task<Result> ThenUpdateIfAsyncCore(
@@ -437,7 +437,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 		return await builder.UpdateAsync(sql, parameters, key, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
 	}
 
-	private async Task<Result<T>> ThenUpdateIfAsyncCore<T>(
+	private async Task<Result<T>> ThenUpdateIfAndReturnAsyncCore<T>(
 		string sql,
 		object? parameters,
 		object key,
@@ -452,7 +452,7 @@ public readonly struct DbResult(TransactionContext builder, Task<Result> resultT
 		if (!when()) {
 			return resultSelector();
 		}
-		return await builder.UpdateAsync(sql, parameters, key, resultSelector, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
+		return await builder.UpdateAndReturnAsync(sql, parameters, key, resultSelector, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
 	}
 
 	#endregion

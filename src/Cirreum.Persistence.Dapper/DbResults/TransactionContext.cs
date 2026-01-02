@@ -79,7 +79,7 @@ public readonly struct TransactionContext(
 	/// <param name="uniqueConstraintMessage">The error message to use if a unique constraint violation occurs.</param>
 	/// <param name="foreignKeyMessage">The error message to use if a foreign key violation occurs.</param>
 	/// <returns>A <see cref="DbResult{T}"/> that can be chained with other database operations.</returns>
-	public DbResult<T> InsertAsync<T>(
+	public DbResult<T> InsertAndReturnAsync<T>(
 		string sql,
 		Func<T> resultSelector,
 		string uniqueConstraintMessage = "Record already exists",
@@ -96,7 +96,7 @@ public readonly struct TransactionContext(
 	/// <param name="uniqueConstraintMessage">The error message to use if a unique constraint violation occurs.</param>
 	/// <param name="foreignKeyMessage">The error message to use if a foreign key violation occurs.</param>
 	/// <returns>A <see cref="DbResult{T}"/> that can be chained with other database operations.</returns>
-	public DbResult<T> InsertAsync<T>(
+	public DbResult<T> InsertAndReturnAsync<T>(
 		string sql,
 		object? parameters,
 		Func<T> resultSelector,
@@ -136,7 +136,7 @@ public readonly struct TransactionContext(
 	/// <param name="uniqueConstraintMessage">The error message to use if a unique constraint violation occurs.</param>
 	/// <param name="foreignKeyMessage">The error message to use if a foreign key violation occurs.</param>
 	/// <returns>A <see cref="DbResult{T}"/> that can be chained with other database operations.</returns>
-	public DbResult<T> UpdateAsync<T>(
+	public DbResult<T> UpdateAndReturnAsync<T>(
 		string sql,
 		object? parameters,
 		object key,

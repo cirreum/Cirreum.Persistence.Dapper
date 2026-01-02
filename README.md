@@ -274,12 +274,18 @@ public async Task<Result<OrderDto>> CreateOrderWithItemsAsync(
 - `ThenGetAsync<TResult>(...)` - Query single record
 - `ThenGetScalarAsync<TResult>(...)` - Query scalar value
 - `ThenQueryAnyAsync<TResult>(...)` - Query collection
-- `ThenInsertAsync(...)` - Insert, returns `DbResult` or `DbResult<TResult>` with result selector
-- `ThenUpdateAsync(...)` - Update, returns `DbResult` or `DbResult<TResult>` with result selector
-- `ThenDeleteAsync(...)` - Delete, returns `DbResult`
-- `ThenInsertIfAsync(..., when)` - Conditional insert (see below)
-- `ThenUpdateIfAsync(..., when)` - Conditional update (see below)
-- `ThenDeleteIfAsync(..., when)` - Conditional delete (see below)
+- `ThenInsertAsync(...)` - Insert, returns `DbResult<T>` (pass-through)
+- `ThenInsertAndReturnAsync<TResult>(...)` - Insert, returns `DbResult<TResult>` (transform)
+- `ThenUpdateAsync(...)` - Update, returns `DbResult<T>` (pass-through)
+- `ThenUpdateAndReturnAsync<TResult>(...)` - Update, returns `DbResult<TResult>` (transform)
+- `ThenDeleteAsync(...)` - Delete, returns `DbResult<T>` (pass-through)
+- `ThenDeleteAndReturnAsync<TResult>(...)` - Delete, returns `DbResult<TResult>` (transform)
+- `ThenInsertIfAsync(..., when)` - Conditional insert, pass-through (see below)
+- `ThenInsertIfAndReturnAsync<TResult>(..., when)` - Conditional insert with transform (see below)
+- `ThenUpdateIfAsync(..., when)` - Conditional update, pass-through (see below)
+- `ThenUpdateIfAndReturnAsync<TResult>(..., when)` - Conditional update with transform (see below)
+- `ThenDeleteIfAsync(..., when)` - Conditional delete, pass-through (see below)
+- `ToResult()` - Convert `DbResult<T>` to `DbResult` (discard value)
 
 **From `DbResult` (void result):**
 - `ThenAsync(Func<Task<Result>>)` - Escape hatch for external async operations
@@ -288,13 +294,15 @@ public async Task<Result<OrderDto>> CreateOrderWithItemsAsync(
 - `ThenGetScalarAsync<TResult>(...)` - Query scalar value
 - `ThenQueryAnyAsync<TResult>(...)` - Query collection
 - `ThenInsertAsync(...)` - Insert, returns `DbResult`
-- `ThenInsertAsync<T>(..., resultSelector)` - Insert, returns `DbResult<T>`
+- `ThenInsertAndReturnAsync<T>(..., resultSelector)` - Insert, returns `DbResult<T>`
 - `ThenUpdateAsync(...)` - Update, returns `DbResult`
-- `ThenUpdateAsync<T>(..., resultSelector)` - Update, returns `DbResult<T>`
+- `ThenUpdateAndReturnAsync<T>(..., resultSelector)` - Update, returns `DbResult<T>`
 - `ThenDeleteAsync(...)` - Delete, returns `DbResult`
-- `ThenInsertIfAsync(..., when)` - Conditional insert (see below)
-- `ThenUpdateIfAsync(..., when)` - Conditional update (see below)
-- `ThenDeleteIfAsync(..., when)` - Conditional delete (see below)
+- `ThenInsertIfAsync(..., when)` - Conditional insert
+- `ThenInsertIfAndReturnAsync<T>(..., resultSelector, when)` - Conditional insert with transform
+- `ThenUpdateIfAsync(..., when)` - Conditional update
+- `ThenUpdateIfAndReturnAsync<T>(..., resultSelector, when)` - Conditional update with transform
+- `ThenDeleteIfAsync(..., when)` - Conditional delete
 
 ### Using Previous Values
 
@@ -309,20 +317,39 @@ Insert, Update, and Delete methods provide overloads that access the previous re
 
 ### Returning Values from Mutations
 
-Use result selectors to return values from Insert/Update operations:
+Use result selectors to return values from Insert/Update operations. The `AndReturn` variants transform the result type:
 
 ```csharp
 var orderId = Guid.CreateVersion7();
 
 return await conn.ExecuteTransactionAsync(ctx =>
-    ctx.InsertAsync(
+    ctx.InsertAndReturnAsync(
         "INSERT INTO Orders (...) VALUES (...)",
         new { OrderId = orderId, ... },
-        () => orderId)  // Returns the new order ID
+        () => orderId)  // Returns the new order ID as DbResult<Guid>
     .ThenGetAsync<OrderDto>(
         "SELECT * FROM Orders WHERE OrderId = @Id",
         new { Id = orderId },
         key: orderId)
+, ct);
+```
+
+From `DbResult<T>`, use `ThenInsertAndReturnAsync` to transform to a new type:
+
+```csharp
+return await conn.ExecuteTransactionAsync(ctx =>
+    ctx.GetAsync<CustomerDto>(
+        "SELECT * FROM Customers WHERE CustomerId = @Id",
+        new { Id = customerId },
+        customerId)
+    .ThenInsertAndReturnAsync(
+        "INSERT INTO Orders (...) VALUES (...)",
+        c => new { OrderId = orderId, c.CustomerId, ... },
+        c => orderId)  // Transforms CustomerDto -> Guid
+    .ThenGetAsync<OrderDto>(
+        "SELECT * FROM Orders WHERE OrderId = @Id",
+        new { Id = orderId },
+        orderId)
 , ct);
 ```
 
@@ -368,7 +395,7 @@ return await conn.ExecuteTransactionAsync(ctx =>
 
 ### Conditional Operations with Type Transformation
 
-When using `ThenXxxIfAsync` with a `resultSelector`, the type transforms regardless of whether the operation executes. This enables powerful composition patterns:
+Use `ThenInsertIfAndReturnAsync`, `ThenUpdateIfAndReturnAsync`, etc. when you need the type to transform regardless of whether the operation executes:
 
 **From `DbResult<T>` to `DbResult<TResult>`:**
 
@@ -378,7 +405,7 @@ return await conn.ExecuteTransactionAsync(ctx =>
         "SELECT * FROM Customers WHERE CustomerId = @Id",
         new { Id = customerId },
         customerId)
-    .ThenInsertIfAsync(
+    .ThenInsertIfAndReturnAsync(
         "INSERT INTO Orders (...) VALUES (...)",
         c => new { OrderId = orderId, c.CustomerId, ... },
         c => orderId,  // resultSelector: CustomerDto -> string (orderId)
@@ -387,6 +414,7 @@ return await conn.ExecuteTransactionAsync(ctx =>
         "UPDATE Orders SET Status = @Status WHERE OrderId = @Id",
         oid => new { Id = oid, Status = "Confirmed" },
         orderId)
+    .ToResult()  // Convert to DbResult when value is no longer needed
 , ct);
 ```
 
@@ -411,7 +439,7 @@ return await conn.ExecuteTransactionAsync<string>(ctx =>
 
 The key insight: **`resultSelector` always runs** (when the chain is successful), even if `when` returns `false` and the operation is skipped. This allows consistent type transformation for subsequent operations.
 
-**Transform only when the operation executes:** If you want to transform the type only when the conditional operation actually runs, use the overload without a `resultSelector` (which passes through the current type) and then chain a `MapAsync`:
+**Pass-through pattern:** If you want the original type to pass through (no transformation), use the non-`AndReturn` variants:
 
 ```csharp
 return await conn.ExecuteTransactionAsync(ctx =>
@@ -495,7 +523,9 @@ return await db.GetAsync<OrderDto>(sql, parameters, key, ct);
 | `GetScalarAsync<T>(...)` | Query scalar value |
 | `QueryAnyAsync<T>(...)` | Query collection |
 | `InsertAsync(...)` | Insert record |
+| `InsertAndReturnAsync<T>(...)` | Insert record and return value via resultSelector |
 | `UpdateAsync(...)` | Update record |
+| `UpdateAndReturnAsync<T>(...)` | Update record and return value via resultSelector |
 | `DeleteAsync(...)` | Delete record |
 
 All factory extensions capture exceptions and convert them to `Result` failures, ensuring consistent error handling.
@@ -515,7 +545,7 @@ public class OrderRepository(IDbConnectionFactory db)
     public Task<Result<Guid>> CreateOrderAsync(CreateOrder cmd, CancellationToken ct)
     {
         var orderId = Guid.CreateVersion7();
-        return db.InsertAsync(
+        return db.InsertAndReturnAsync(
             "INSERT INTO Orders (OrderId, CustomerId, Amount) VALUES (@OrderId, @CustomerId, @Amount)",
             new { OrderId = orderId, cmd.CustomerId, cmd.Amount },
             () => orderId,
@@ -531,10 +561,10 @@ public class OrderRepository(IDbConnectionFactory db)
             .EnsureAsync(
                 c => c.IsActive,
                 new BadRequestException("Customer is not active"))
-            .ThenInsertAsync(
+            .ThenInsertAndReturnAsync(
                 "INSERT INTO Orders (...) VALUES (...)",
                 c => new { OrderId = Guid.CreateVersion7(), c.CustomerId, cmd.Amount },
-                () => new OrderDto(...))
+                c => new OrderDto(...))  // Transform CustomerDto -> OrderDto
         , ct);
 }
 ```

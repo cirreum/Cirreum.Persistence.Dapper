@@ -438,6 +438,7 @@ public sealed class SqliteIntegrationTests {
 			.ThenInsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = orderId, UserId = userId, Amount = 150.0 })
+			.ToResult()
 , this.TestContext.CancellationToken);
 
 		// Assert
@@ -466,6 +467,7 @@ public sealed class SqliteIntegrationTests {
 			.ThenInsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				user => new { Id = orderId, UserId = user.Id, Amount = 250.0 })
+			.ToResult()
 			, this.TestContext.CancellationToken);
 
 		// Assert
@@ -495,11 +497,11 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenInsertAsync(
+			.ThenInsertAndReturnAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = orderId, UserId = userId, Amount = 350.0 },
-				() => orderId)
-, this.TestContext.CancellationToken);
+				_ => orderId)
+			, this.TestContext.CancellationToken);
 
 		// Assert
 		Assert.IsTrue(result.IsSuccess);
@@ -523,11 +525,11 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenInsertAsync(
+			.ThenInsertAndReturnAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				user => new { Id = orderId, UserId = user.Id, Amount = 450.0 },
-				() => (orderId, "John"))
-, this.TestContext.CancellationToken);
+				_ => (orderId, "John"))
+			, this.TestContext.CancellationToken);
 
 		// Assert
 		Assert.IsTrue(result.IsSuccess);
@@ -556,7 +558,7 @@ public sealed class SqliteIntegrationTests {
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				user => new { Id = orderId, UserId = user.Id, Amount = 100.0 })
 			.ThenGetScalarAsync<long>("SELECT COUNT(*) FROM Orders WHERE UserId = @UserId", new { UserId = userId })
-, this.TestContext.CancellationToken);
+			, this.TestContext.CancellationToken);
 
 		// Assert
 		Assert.IsTrue(result.IsSuccess);
@@ -587,7 +589,8 @@ public sealed class SqliteIntegrationTests {
 			.ThenInsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = orderId2, UserId = userId, Amount = 200.0 })
-, this.TestContext.CancellationToken);
+			.ToResult()
+			, this.TestContext.CancellationToken);
 
 		// Assert
 		Assert.IsTrue(result.IsSuccess);
@@ -614,7 +617,8 @@ public sealed class SqliteIntegrationTests {
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				new { Id = userId, Name = "Jane" },
 				userId)
-, this.TestContext.CancellationToken);
+			.ToResult()
+			, this.TestContext.CancellationToken);
 
 		// Assert
 		Assert.IsTrue(result.IsSuccess);
@@ -641,7 +645,8 @@ public sealed class SqliteIntegrationTests {
 				"UPDATE Users SET Name = @NewName WHERE Id = @Id",
 				user => new { user.Id, NewName = user.Name + " Updated" },
 				userId)
-, this.TestContext.CancellationToken);
+			.ToResult()
+			, this.TestContext.CancellationToken);
 
 		// Assert
 		Assert.IsTrue(result.IsSuccess);
@@ -664,12 +669,12 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenUpdateAsync(
+			.ThenUpdateAndReturnAsync(
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				new { Id = userId, Name = "Jane" },
 				userId,
-				() => "Updated successfully")
-, this.TestContext.CancellationToken);
+				_ => "Updated successfully")
+			, this.TestContext.CancellationToken);
 
 		// Assert
 		Assert.IsTrue(result.IsSuccess);
@@ -695,7 +700,8 @@ public sealed class SqliteIntegrationTests {
 				"DELETE FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-, this.TestContext.CancellationToken);
+			.ToResult()
+			, this.TestContext.CancellationToken);
 
 		// Assert
 		Assert.IsTrue(result.IsSuccess);
@@ -723,7 +729,7 @@ public sealed class SqliteIntegrationTests {
 				user => new { user.Id },
 				userId)
 			.ToResult()
-, this.TestContext.CancellationToken);
+			, this.TestContext.CancellationToken);
 
 		// Assert
 		Assert.IsTrue(result.IsSuccess);
@@ -750,7 +756,8 @@ public sealed class SqliteIntegrationTests {
 					insertExecuted = true;
 					return new { Id = Guid.NewGuid().ToString(), UserId = "test", Amount = 100.0 };
 				})
-, this.TestContext.CancellationToken);
+			.ToResult()
+			, this.TestContext.CancellationToken);
 
 		// Assert
 		Assert.IsTrue(result.IsFailure);
@@ -783,7 +790,7 @@ public sealed class SqliteIntegrationTests {
 				new { Id = userId, Name = "John (with order)" },
 				userId)
 			.ThenGetScalarAsync<long>("SELECT COUNT(*) FROM Orders WHERE UserId = @UserId", new { UserId = userId })
-, this.TestContext.CancellationToken);
+			, this.TestContext.CancellationToken);
 
 		// Assert
 		Assert.IsTrue(result.IsSuccess);
@@ -813,11 +820,11 @@ public sealed class SqliteIntegrationTests {
 			.ThenInsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = orderId1, UserId = userId, Amount = 100.0 })
-			.ThenInsertAsync(
+			.ThenInsertAndReturnAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = orderId2, UserId = userId, Amount = 200.0 },
-				() => orderId2)
-, this.TestContext.CancellationToken);
+				_ => orderId2)
+			, this.TestContext.CancellationToken);
 
 		// Assert
 		Assert.IsTrue(result.IsSuccess);
@@ -911,7 +918,7 @@ public sealed class SqliteIntegrationTests {
 
 		// Act - InsertAsync<T> returns DbResult<T>, then chain to ThenUpdateAsync
 		var result = await conn.ExecuteTransactionAsync(db =>
-			db.InsertAsync(
+			db.InsertAndReturnAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" },
 				() => userId)
@@ -919,6 +926,7 @@ public sealed class SqliteIntegrationTests {
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				id => new { Id = id, Name = "Updated via chain" },
 				userId)
+			.ToResult()
 		, this.TestContext.CancellationToken);
 
 		// Assert
@@ -1026,7 +1034,7 @@ public sealed class SqliteIntegrationTests {
 
 		// Act: Insert -> Get (using parametersFactory) -> Update (using parametersFactory)
 		var result = await conn.ExecuteTransactionAsync(db =>
-			db.InsertAsync(
+			db.InsertAndReturnAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" },
 				() => userId)
@@ -1038,6 +1046,7 @@ public sealed class SqliteIntegrationTests {
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				user => new { user.Id, Name = $"{user.Name} (verified)" },
 				userId)
+			.ToResult()
 		, this.TestContext.CancellationToken);
 
 		// Assert
@@ -1056,17 +1065,17 @@ public sealed class SqliteIntegrationTests {
 
 		// Act: Insert user -> Get scalar count -> Insert order using count in amount
 		var result = await conn.ExecuteTransactionAsync<string>(db =>
-			db.InsertAsync(
+			db.InsertAndReturnAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" },
 				() => userId)
 			.ThenGetScalarAsync<long>(
 				"SELECT COUNT(*) FROM Users",
 				_ => null)
-			.ThenInsertAsync(
+			.ThenInsertAndReturnAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				count => new { Id = orderId, UserId = userId, Amount = (double)(count * 100) },
-				() => orderId)
+				_ => orderId)
 		, this.TestContext.CancellationToken);
 
 		// Assert
@@ -1085,7 +1094,7 @@ public sealed class SqliteIntegrationTests {
 
 		// Act: Insert -> Ensure (validate) -> Update
 		var result = await conn.ExecuteTransactionAsync(db =>
-			db.InsertAsync(
+			db.InsertAndReturnAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" },
 				() => new UserDto(userId, "John", "john@test.com"))
@@ -1094,6 +1103,7 @@ public sealed class SqliteIntegrationTests {
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				user => new { user.Id, Name = $"{user.Name} (email verified)" },
 				userId)
+			.ToResult()
 		, this.TestContext.CancellationToken);
 
 		// Assert
@@ -1111,7 +1121,7 @@ public sealed class SqliteIntegrationTests {
 
 		// Act: Insert -> Ensure (fails) -> Update (should be skipped)
 		var result = await conn.ExecuteTransactionAsync(db =>
-			db.InsertAsync(
+			db.InsertAndReturnAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "invalid-email" },
 				() => new UserDto(userId, "John", "invalid-email"))
@@ -1120,6 +1130,7 @@ public sealed class SqliteIntegrationTests {
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				user => new { user.Id, Name = "Should not reach here" },
 				userId)
+			.ToResult()
 		, this.TestContext.CancellationToken);
 
 		// Assert
@@ -1144,7 +1155,7 @@ public sealed class SqliteIntegrationTests {
 
 		// Act: Update -> Get -> Delete -> QueryAny
 		var result = await conn.ExecuteTransactionAsync<IReadOnlyList<UserDto>>(db =>
-			db.UpdateAsync(
+			db.UpdateAndReturnAsync(
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				new { Id = userId1, Name = "John Updated" },
 				userId1,
@@ -1180,7 +1191,7 @@ public sealed class SqliteIntegrationTests {
 
 		// Act: Insert new user -> QueryAny all users -> Insert order for first user
 		var result = await conn.ExecuteTransactionAsync(db =>
-			db.InsertAsync(
+			db.InsertAndReturnAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "New User", Email = "new@test.com" },
 				() => userId)
@@ -1190,6 +1201,7 @@ public sealed class SqliteIntegrationTests {
 			.ThenInsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				users => new { Id = orderId, UserId = users[0].Id, Amount = users.Count * 50.0 })
+			.ToResult()
 		, this.TestContext.CancellationToken);
 
 		// Assert
@@ -1221,6 +1233,7 @@ public sealed class SqliteIntegrationTests {
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				count => new { Id = userId2, Name = $"Last of {count}" },
 				userId2)
+			.ToResult()
 		, this.TestContext.CancellationToken);
 
 		// Assert
@@ -1238,7 +1251,7 @@ public sealed class SqliteIntegrationTests {
 
 		// Act: Insert -> Map to uppercase name -> Update with mapped value
 		var result = await conn.ExecuteTransactionAsync(db =>
-			db.InsertAsync(
+			db.InsertAndReturnAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "john doe", Email = "john@test.com" },
 				() => new UserDto(userId, "john doe", "john@test.com"))
@@ -1247,6 +1260,7 @@ public sealed class SqliteIntegrationTests {
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				user => new { user.Id, user.Name },
 				userId)
+			.ToResult()
 		, this.TestContext.CancellationToken);
 
 		// Assert
@@ -1265,7 +1279,7 @@ public sealed class SqliteIntegrationTests {
 
 		// Act: Insert user -> Get user -> Insert order -> Get order
 		var result = await conn.ExecuteTransactionAsync<OrderDto>(db =>
-			db.InsertAsync(
+			db.InsertAndReturnAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" },
 				() => userId)
@@ -1273,10 +1287,10 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				id => new { Id = id },
 				userId)
-			.ThenInsertAsync(
+			.ThenInsertAndReturnAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				user => new { Id = orderId, UserId = user.Id, Amount = 250.0 },
-				() => orderId)
+				_ => orderId)
 			.ThenGetAsync<OrderDto>(
 				"SELECT Id, UserId, Amount FROM Orders WHERE Id = @Id",
 				id => new { Id = id },
@@ -1307,7 +1321,7 @@ public sealed class SqliteIntegrationTests {
 
 		// Act: Update one -> Query all -> Delete based on query (delete the first active)
 		var result = await conn.ExecuteTransactionAsync(db =>
-			db.UpdateAsync(
+			db.UpdateAndReturnAsync(
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				new { Id = userId2, Name = "StillInactive" },
 				userId2,
@@ -1319,6 +1333,7 @@ public sealed class SqliteIntegrationTests {
 				"DELETE FROM Users WHERE Id = @Id",
 				activeUsers => new { activeUsers[0].Id },
 				"first-active")
+			.ToResult()
 		, this.TestContext.CancellationToken);
 
 		// Assert
@@ -1340,18 +1355,18 @@ public sealed class SqliteIntegrationTests {
 
 		// Act: Insert -> GetScalar (count before) -> Update -> GetScalar (count after, should be same)
 		var result = await conn.ExecuteTransactionAsync<long>(db =>
-			db.InsertAsync(
+			db.InsertAndReturnAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "CountTest", Email = "count@test.com" },
 				() => 0L) // Placeholder, we'll get actual count next
 			.ThenGetScalarAsync<long>(
 				"SELECT COUNT(*) FROM Users",
 				_ => null)
-			.ThenUpdateAsync(
+			.ThenUpdateAndReturnAsync(
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				count => new { Id = userId, Name = $"User #{count}" },
 				userId,
-				() => userId)
+				_ => userId)
 			.ThenGetScalarAsync<long>(
 				"SELECT COUNT(*) FROM Users",
 				_ => null)
@@ -1703,11 +1718,11 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenInsertIfAsync(
+			.ThenInsertIfAndReturnAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				user => new { Id = orderId, UserId = user.Id, Amount = 100.0 },
 				_ => orderId,  // Func<T, TResult> - receives the current value
-				when: _ => false)  // Skip insert
+				_ => false)  // Skip insert
 		, this.TestContext.CancellationToken);
 
 		// Assert
@@ -1735,11 +1750,11 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenInsertIfAsync(
+			.ThenInsertIfAndReturnAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				user => new { Id = orderId, UserId = user.Id, Amount = 100.0 },
 				user => $"Order for {user.Name}",  // Func<T, TResult> - receives the current value
-				when: _ => true)  // Execute insert
+				_ => true)  // Execute insert
 		, this.TestContext.CancellationToken);
 
 		// Assert
@@ -1768,15 +1783,16 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenInsertIfAsync(
+			.ThenInsertIfAndReturnAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				user => new { Id = orderId, UserId = user.Id, Amount = 100.0 },
 				_ => orderId,  // Transform UserDto -> string (orderId)
-				when: _ => true)
+				_ => true)
 			.ThenUpdateAsync(  // This should receive string (orderId), not UserDto
 				"UPDATE Orders SET Amount = @Amount WHERE Id = @Id",
 				oid => new { Id = oid, Amount = 200.0 },  // oid is string
 				orderId)
+			.ToResult()
 		, this.TestContext.CancellationToken);
 
 		// Assert
@@ -1806,15 +1822,16 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenInsertIfAsync(
+			.ThenInsertIfAndReturnAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				user => new { Id = Guid.NewGuid().ToString(), UserId = user.Id, Amount = 999.0 },
 				_ => orderId,  // Transform UserDto -> string (orderId)
-				when: _ => false)  // Skip insert
+				_ => false)  // Skip insert
 			.ThenUpdateAsync(  // This should still receive string (orderId)
 				"UPDATE Orders SET Amount = @Amount WHERE Id = @Id",
 				oid => new { Id = oid, Amount = 300.0 },
 				orderId)
+			.ToResult()
 		, this.TestContext.CancellationToken);
 
 		// Assert
@@ -1871,12 +1888,12 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenUpdateIfAsync(
+			.ThenUpdateIfAndReturnAsync(
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				user => new { user.Id, Name = "UpdatedName" },
 				userId,
 				user => new UserLight(user.Id, user.Name),  // Result selector
-				when: _ => false)  // Never execute
+				_ => false)  // Never execute
 		, this.TestContext.CancellationToken);
 
 		// Assert
@@ -1932,12 +1949,12 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenUpdateIfAsync(
+			.ThenUpdateIfAndReturnAsync(
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				user => new { user.Id, Name = "UpdatedName" },
 				userId,
 				user => new UserLight(user.Id, user.Name),  // Result selector
-				when: _ => true)  // Always execute
+				_ => true)  // Always execute
 		, this.TestContext.CancellationToken);
 
 		// Assert
@@ -2129,7 +2146,7 @@ public sealed class SqliteIntegrationTests {
 			ctx.InsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = Guid.NewGuid().ToString(), UserId = userId, Amount = 50.0 })
-			.ThenInsertIfAsync(
+			.ThenInsertIfAndReturnAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = orderId, UserId = userId, Amount = 100.0 },
 				() => orderId,
@@ -2160,7 +2177,7 @@ public sealed class SqliteIntegrationTests {
 			ctx.InsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = Guid.NewGuid().ToString(), UserId = userId, Amount = 50.0 })
-			.ThenInsertIfAsync(
+			.ThenInsertIfAndReturnAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = orderId, UserId = userId, Amount = 100.0 },
 				() => $"Created order {orderId}",
@@ -2191,7 +2208,7 @@ public sealed class SqliteIntegrationTests {
 			ctx.InsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = Guid.NewGuid().ToString(), UserId = userId, Amount = 50.0 })
-			.ThenUpdateIfAsync(
+			.ThenUpdateIfAndReturnAsync(
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				new { Id = userId, Name = "UpdatedName" },
 				userId,
@@ -2222,7 +2239,7 @@ public sealed class SqliteIntegrationTests {
 			ctx.InsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				new { Id = Guid.NewGuid().ToString(), UserId = userId, Amount = 50.0 })
-			.ThenUpdateIfAsync(
+			.ThenUpdateIfAndReturnAsync(
 				"UPDATE Users SET Name = @Name WHERE Id = @Id",
 				new { Id = userId, Name = "UpdatedName" },
 				userId,
@@ -2427,151 +2444,6 @@ public sealed class SqliteIntegrationTests {
 	}
 
 	[TestMethod]
-	public async Task NonGenericDbResult_ThenInsertIfAsyncWithResultSelector_WhenTrue_NextOperationReceivesTransformedType() {
-		// Arrange
-		using var conn = CreateConnection();
-		CreateTestSchema(conn);
-		var userId = Guid.NewGuid().ToString();
-		var orderId = Guid.NewGuid().ToString();
-		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
-			new { Id = userId, Name = "John", Email = "john@test.com" });
-
-		// Act - Chain: Insert (DbResult) -> ThenInsertIfAsync<T> transforms to string -> ThenUpdateAsync uses string
-		var result = await conn.ExecuteTransactionAsync(ctx =>
-			ctx.InsertAsync(
-				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
-				new { Id = Guid.NewGuid().ToString(), Name = "Jane", Email = "jane@test.com" })
-			.ThenInsertIfAsync(
-				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
-				new { Id = orderId, UserId = userId, Amount = 100.0 },
-				() => orderId,  // Transform DbResult -> DbResult<string>
-				when: () => true)
-			.ThenUpdateAsync(  // This receives string (orderId)
-				"UPDATE Orders SET Amount = @Amount WHERE Id = @Id",
-				oid => new { Id = oid, Amount = 250.0 },
-				orderId)
-		, this.TestContext.CancellationToken);
-
-		// Assert
-		Assert.IsTrue(result.IsSuccess);
-		var order = conn.QuerySingle<OrderDto>(
-			"SELECT Id, UserId, Amount FROM Orders WHERE Id = @Id",
-			new { Id = orderId });
-		Assert.AreEqual(250.0, order.Amount, "Update should have used the transformed orderId");
-	}
-
-	[TestMethod]
-	public async Task NonGenericDbResult_ThenInsertIfAsyncWithResultSelector_WhenFalse_NextOperationReceivesTransformedType() {
-		// Arrange
-		using var conn = CreateConnection();
-		CreateTestSchema(conn);
-		var userId = Guid.NewGuid().ToString();
-		var orderId = Guid.NewGuid().ToString();
-		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
-			new { Id = userId, Name = "John", Email = "john@test.com" });
-		// Pre-create order so update works
-		conn.Execute("INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
-			new { Id = orderId, UserId = userId, Amount = 50.0 });
-
-		// Act - when=false: insert skipped, resultSelector still transforms type for next operation
-		var result = await conn.ExecuteTransactionAsync(ctx =>
-			ctx.InsertAsync(
-				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
-				new { Id = Guid.NewGuid().ToString(), Name = "Jane", Email = "jane@test.com" })
-			.ThenInsertIfAsync(
-				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
-				new { Id = Guid.NewGuid().ToString(), UserId = userId, Amount = 999.0 },
-				() => orderId,  // Transform DbResult -> DbResult<string>
-				when: () => false)  // Skip insert
-			.ThenUpdateAsync(  // This should still receive string (orderId)
-				"UPDATE Orders SET Amount = @Amount WHERE Id = @Id",
-				oid => new { Id = oid, Amount = 350.0 },
-				orderId)
-		, this.TestContext.CancellationToken);
-
-		// Assert
-		Assert.IsTrue(result.IsSuccess);
-		var order = conn.QuerySingle<OrderDto>(
-			"SELECT Id, UserId, Amount FROM Orders WHERE Id = @Id",
-			new { Id = orderId });
-		Assert.AreEqual(350.0, order.Amount, "Update should have used the transformed orderId even when insert was skipped");
-	}
-
-	[TestMethod]
-	public async Task NonGenericDbResult_ThenUpdateIfAsyncWithResultSelector_WhenTrue_NextOperationReceivesTransformedType() {
-		// Arrange
-		using var conn = CreateConnection();
-		CreateTestSchema(conn);
-		var userId = Guid.NewGuid().ToString();
-		var orderId = Guid.NewGuid().ToString();
-		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
-			new { Id = userId, Name = "John", Email = "john@test.com" });
-		conn.Execute("INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
-			new { Id = orderId, UserId = userId, Amount = 50.0 });
-
-		// Act - Chain: Insert (DbResult) -> ThenUpdateIfAsync<T> transforms to string -> ThenUpdateAsync uses string
-		var result = await conn.ExecuteTransactionAsync(ctx =>
-			ctx.InsertAsync(
-				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
-				new { Id = Guid.NewGuid().ToString(), Name = "Jane", Email = "jane@test.com" })
-			.ThenUpdateIfAsync(
-				"UPDATE Orders SET Amount = @Amount WHERE Id = @Id",
-				new { Id = orderId, Amount = 100.0 },
-				orderId,
-				() => orderId,  // Transform DbResult -> DbResult<string>
-				when: () => true)
-			.ThenUpdateAsync(  // This receives string (orderId)
-				"UPDATE Orders SET Amount = @Amount WHERE Id = @Id",
-				oid => new { Id = oid, Amount = 400.0 },
-				orderId)
-		, this.TestContext.CancellationToken);
-
-		// Assert
-		Assert.IsTrue(result.IsSuccess);
-		var order = conn.QuerySingle<OrderDto>(
-			"SELECT Id, UserId, Amount FROM Orders WHERE Id = @Id",
-			new { Id = orderId });
-		Assert.AreEqual(400.0, order.Amount, "Second update should have used the transformed orderId");
-	}
-
-	[TestMethod]
-	public async Task NonGenericDbResult_ThenUpdateIfAsyncWithResultSelector_WhenFalse_NextOperationReceivesTransformedType() {
-		// Arrange
-		using var conn = CreateConnection();
-		CreateTestSchema(conn);
-		var userId = Guid.NewGuid().ToString();
-		var orderId = Guid.NewGuid().ToString();
-		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
-			new { Id = userId, Name = "John", Email = "john@test.com" });
-		conn.Execute("INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
-			new { Id = orderId, UserId = userId, Amount = 50.0 });
-
-		// Act - when=false: first update skipped, resultSelector still transforms type for next operation
-		var result = await conn.ExecuteTransactionAsync(ctx =>
-			ctx.InsertAsync(
-				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
-				new { Id = Guid.NewGuid().ToString(), Name = "Jane", Email = "jane@test.com" })
-			.ThenUpdateIfAsync(
-				"UPDATE Orders SET Amount = @Amount WHERE Id = @Id",
-				new { Id = orderId, Amount = 999.0 },  // Would set to 999 but will be skipped
-				orderId,
-				() => orderId,  // Transform DbResult -> DbResult<string>
-				when: () => false)  // Skip this update
-			.ThenUpdateAsync(  // This should still receive string (orderId)
-				"UPDATE Orders SET Amount = @Amount WHERE Id = @Id",
-				oid => new { Id = oid, Amount = 500.0 },
-				orderId)
-		, this.TestContext.CancellationToken);
-
-		// Assert
-		Assert.IsTrue(result.IsSuccess);
-		var order = conn.QuerySingle<OrderDto>(
-			"SELECT Id, UserId, Amount FROM Orders WHERE Id = @Id",
-			new { Id = orderId });
-		Assert.AreEqual(500.0, order.Amount, "Second update should have used the transformed orderId even when first update was skipped");
-	}
-
-	[TestMethod]
 	public async Task ThenUpdateIfAsync_Generic_WithResultSelector_WhenTrue_NextOperationReceivesTransformedType() {
 		// Arrange
 		using var conn = CreateConnection();
@@ -2583,22 +2455,23 @@ public sealed class SqliteIntegrationTests {
 		conn.Execute("INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 			new { Id = orderId, UserId = userId, Amount = 50.0 });
 
-		// Act - Chain: Get UserDto -> ThenUpdateIfAsync transforms to string -> ThenUpdateAsync uses string
+		// Act - Chain: Get UserDto -> ThenUpdateIfAndReturnAsync transforms to string -> ThenUpdateAsync uses string
 		var result = await conn.ExecuteTransactionAsync(ctx =>
 			ctx.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenUpdateIfAsync(
+			.ThenUpdateIfAndReturnAsync(
 				"UPDATE Orders SET Amount = @Amount WHERE UserId = @UserId",
 				user => new { UserId = user.Id, Amount = 150.0 },
 				orderId,
 				user => orderId,  // Transform UserDto -> string (orderId)
-				when: _ => true)
+				_ => true)
 			.ThenUpdateAsync(  // This receives string (orderId)
 				"UPDATE Orders SET Amount = @Amount WHERE Id = @Id",
 				oid => new { Id = oid, Amount = 600.0 },
 				orderId)
+			.ToResult()
 		, this.TestContext.CancellationToken);
 
 		// Assert
@@ -2627,16 +2500,17 @@ public sealed class SqliteIntegrationTests {
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
 				userId)
-			.ThenUpdateIfAsync(
+			.ThenUpdateIfAndReturnAsync(
 				"UPDATE Orders SET Amount = @Amount WHERE UserId = @UserId",
 				user => new { UserId = user.Id, Amount = 999.0 },  // Would set to 999 but will be skipped
 				orderId,
 				user => orderId,  // Transform UserDto -> string (orderId)
-				when: _ => false)  // Skip this update
+				_ => false)  // Skip this update
 			.ThenUpdateAsync(  // This should still receive string (orderId)
 				"UPDATE Orders SET Amount = @Amount WHERE Id = @Id",
 				oid => new { Id = oid, Amount = 700.0 },
 				orderId)
+			.ToResult()
 		, this.TestContext.CancellationToken);
 
 		// Assert

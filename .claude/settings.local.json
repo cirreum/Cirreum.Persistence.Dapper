@@ -6,7 +6,12 @@
       "Bash(dotnet restore:*)",
       "Bash(dir:*)",
       "Bash(dotnet test:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(grep:*)",
+      "Bash(cut:*)",
+      "Bash(cmd /c \"dir C:\\Cirreum\\Infrastructure\\Cirreum.Persistence.Dapper\\*.sln /b 2>&1\")",
+      "Bash(cmd /c \"dir /s /b C:\\Cirreum\\Infrastructure\\Cirreum.Persistence.Dapper\\*.sln 2>&1\")",
+      "Bash(cmd /c \"dir /s /b C:\\Cirreum\\Infrastructure\\Cirreum.Persistence.Dapper\\*.csproj\")"
     ],
     "deny": [],
     "ask": []

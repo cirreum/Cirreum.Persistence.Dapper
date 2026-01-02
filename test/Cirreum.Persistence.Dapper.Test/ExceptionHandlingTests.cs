@@ -115,7 +115,7 @@ public sealed class ExceptionHandlingTests {
 
 		// Act - Insert then map throws
 		var result = await conn.ExecuteTransactionAsync<User>(ctx =>
-			ctx.InsertAsync(
+			ctx.InsertAndReturnAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" },
 				() => new UserDto(userId, "John", "john@test.com"))
@@ -146,7 +146,7 @@ public sealed class ExceptionHandlingTests {
 
 		// Act - Insert then ensure predicate throws
 		var result = await conn.ExecuteTransactionAsync<UserDto>(ctx =>
-			ctx.InsertAsync(
+			ctx.InsertAndReturnAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" },
 				() => new UserDto(userId, "John", "john@test.com"))
@@ -180,13 +180,14 @@ public sealed class ExceptionHandlingTests {
 
 		// Act - Insert user, then parameters factory for order throws
 		var result = await conn.ExecuteTransactionAsync(ctx =>
-			ctx.InsertAsync(
+			ctx.InsertAndReturnAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" },
 				() => userId)
 			.ThenInsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				_ => throw new ArgumentNullException("userId", "Parameters factory failed!"))
+			.ToResult()
 		, this.TestContext.CancellationToken);
 
 		// Assert
@@ -209,7 +210,7 @@ public sealed class ExceptionHandlingTests {
 
 		// Act - Insert with result selector that throws
 		var result = await conn.ExecuteTransactionAsync<string>(ctx =>
-			ctx.InsertAsync<string>(
+			ctx.InsertAndReturnAsync<string>(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" },
 				() => throw new InvalidCastException("Result selector failed!"))
@@ -308,7 +309,7 @@ public sealed class ExceptionHandlingTests {
 
 		// Act
 		var result = await conn.ExecuteTransactionAsync<long>(ctx =>
-			ctx.InsertAsync(
+			ctx.InsertAndReturnAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" },
 				() => new UserDto(userId, "John", "john@test.com"))
@@ -340,7 +341,7 @@ public sealed class ExceptionHandlingTests {
 
 		// Act - First operation's result selector throws, second should not run
 		var result = await conn.ExecuteTransactionAsync(ctx =>
-			ctx.InsertAsync<UserDto>(
+			ctx.InsertAndReturnAsync<UserDto>(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = Guid.NewGuid().ToString(), Name = "John", Email = "john@test.com" },
 				() => throw new AccessViolationException("First operation failed!"))
@@ -350,6 +351,7 @@ public sealed class ExceptionHandlingTests {
 					orderInsertExecuted = true;
 					return new { Id = orderId, UserId = user.Id, Amount = 100.0 };
 				})
+			.ToResult()
 		, this.TestContext.CancellationToken);
 
 		// Assert
@@ -369,14 +371,14 @@ public sealed class ExceptionHandlingTests {
 
 		// Act - Insert user, insert order 1, throw, insert order 2 (should never run)
 		var result = await conn.ExecuteTransactionAsync(ctx =>
-			ctx.InsertAsync(
+			ctx.InsertAndReturnAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" },
 				() => userId)
-			.ThenInsertAsync(
+			.ThenInsertAndReturnAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				_ => new { Id = orderId1, UserId = userId, Amount = 100.0 },
-				() => orderId1)
+				_ => orderId1)
 			.MapAsync(_ => {
 				static string Throw() => throw new Exception("Boom!");
 				return Throw();
@@ -384,6 +386,7 @@ public sealed class ExceptionHandlingTests {
 			.ThenInsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				_ => new { Id = orderId2, UserId = userId, Amount = 200.0 })
+			.ToResult()
 		, this.TestContext.CancellationToken);
 
 		// Assert

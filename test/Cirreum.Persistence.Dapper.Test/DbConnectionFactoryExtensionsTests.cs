@@ -152,7 +152,7 @@ public sealed class DbConnectionFactoryExtensionsTests {
 
 		// Act
 		var result = await this._factory.ExecuteTransactionAsync<string>(ctx =>
-			ctx.InsertAsync(
+			ctx.InsertAndReturnAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" },
 				() => userId)
@@ -170,7 +170,7 @@ public sealed class DbConnectionFactoryExtensionsTests {
 
 		// Act - Insert then fail on an ensure clause
 		var result = await this._factory.ExecuteTransactionAsync<UserDto>(ctx =>
-			ctx.InsertAsync(
+			ctx.InsertAndReturnAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "Invalid", Email = "invalid@test.com" },
 				() => new UserDto(userId, "Invalid", "invalid@test.com"))
@@ -591,14 +591,14 @@ public sealed class DbConnectionFactoryExtensionsTests {
 
 		// Act - Full fluent chain through factory
 		var result = await this._factory.ExecuteTransactionAsync<OrderDto>(ctx => ctx
-			.InsertAsync(
+			.InsertAndReturnAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" },
 				() => userId)
-			.ThenInsertAsync(
+			.ThenInsertAndReturnAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				id => new { Id = orderId, UserId = id, Amount = 100.0 },
-				() => orderId)
+				_ => orderId)
 			.ThenGetAsync<OrderDto>(
 				"SELECT Id, UserId, Amount FROM Orders WHERE Id = @Id",
 				id => new { Id = id },
@@ -620,14 +620,14 @@ public sealed class DbConnectionFactoryExtensionsTests {
 
 		// Act - Insert user, insert order, then fail validation on order amount
 		var result = await this._factory.ExecuteTransactionAsync<OrderDto>(ctx => ctx
-			.InsertAsync(
+			.InsertAndReturnAsync(
 				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 				new { Id = userId, Name = "John", Email = "john@test.com" },
 				() => userId)
-			.ThenInsertAsync(
+			.ThenInsertAndReturnAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				id => new { Id = orderId, UserId = id, Amount = 50.0 },
-				() => new OrderDto(orderId, userId, 50.0))
+				_ => new OrderDto(orderId, userId, 50.0))
 			.EnsureAsync(
 				order => order.Amount >= 100.0,
 				new BadRequestException("Order amount must be at least 100"))
