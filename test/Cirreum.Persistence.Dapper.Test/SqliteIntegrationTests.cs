@@ -2523,6 +2523,369 @@ public sealed class SqliteIntegrationTests {
 
 	#endregion
 
+	#region TransactionContext CUDIfAsync Methods
+
+	[TestMethod]
+	public async Task InsertIfAsync_WithWhenTrue_ExecutesInsert() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		var shouldInsert = true;
+
+		// Act - Start chain with conditional insert
+		var result = await conn.ExecuteTransactionAsync(ctx =>
+			ctx.InsertIfAsync(
+				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+				new { Id = userId, Name = "John", Email = "john@test.com" },
+				when: () => shouldInsert)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		var user = conn.QuerySingleOrDefault<UserDto>(
+			"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+			new { Id = userId });
+		Assert.IsNotNull(user);
+		Assert.AreEqual("John", user.Name);
+	}
+
+	[TestMethod]
+	public async Task InsertIfAsync_WithWhenFalse_SkipsInsert() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		var shouldInsert = false;
+
+		// Act - Start chain with conditional insert that should be skipped
+		var result = await conn.ExecuteTransactionAsync(ctx =>
+			ctx.InsertIfAsync(
+				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+				new { Id = userId, Name = "John", Email = "john@test.com" },
+				when: () => shouldInsert)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess, "Result should be successful even when insert is skipped");
+		var user = conn.QuerySingleOrDefault<UserDto>(
+			"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+			new { Id = userId });
+		Assert.IsNull(user, "Insert should have been skipped");
+	}
+
+	[TestMethod]
+	public async Task InsertIfAsync_WithoutParameters_WithWhenTrue_ExecutesInsert() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		var shouldInsert = true;
+
+		// Act - Start chain with conditional insert (no parameters overload)
+		var result = await conn.ExecuteTransactionAsync(ctx =>
+			ctx.InsertIfAsync(
+				$"INSERT INTO Users (Id, Name, Email) VALUES ('{userId}', 'John', 'john@test.com')",
+				when: () => shouldInsert)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		var user = conn.QuerySingleOrDefault<UserDto>(
+			"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+			new { Id = userId });
+		Assert.IsNotNull(user);
+	}
+
+	[TestMethod]
+	public async Task InsertIfAndReturnAsync_WithWhenTrue_ExecutesInsertAndReturnsValue() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		var shouldInsert = true;
+
+		// Act - Start chain with conditional insert that returns a value
+		var result = await conn.ExecuteTransactionAsync<string>(ctx =>
+			ctx.InsertIfAndReturnAsync(
+				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+				new { Id = userId, Name = "John", Email = "john@test.com" },
+				resultSelector: () => userId,
+				when: () => shouldInsert)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		Assert.AreEqual(userId, result.Value);
+		var user = conn.QuerySingleOrDefault<UserDto>(
+			"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+			new { Id = userId });
+		Assert.IsNotNull(user);
+	}
+
+	[TestMethod]
+	public async Task InsertIfAndReturnAsync_WithWhenFalse_SkipsInsertButReturnsValue() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		var shouldInsert = false;
+
+		// Act - Start chain with conditional insert that should be skipped
+		var result = await conn.ExecuteTransactionAsync<string>(ctx =>
+			ctx.InsertIfAndReturnAsync(
+				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+				new { Id = userId, Name = "John", Email = "john@test.com" },
+				resultSelector: () => "skipped",
+				when: () => shouldInsert)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		Assert.AreEqual("skipped", result.Value, "Result selector should still be called when insert is skipped");
+		var user = conn.QuerySingleOrDefault<UserDto>(
+			"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+			new { Id = userId });
+		Assert.IsNull(user, "Insert should have been skipped");
+	}
+
+	[TestMethod]
+	public async Task UpdateIfAsync_WithWhenTrue_ExecutesUpdate() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+		var shouldUpdate = true;
+
+		// Act - Start chain with conditional update
+		var result = await conn.ExecuteTransactionAsync(ctx =>
+			ctx.UpdateIfAsync(
+				"UPDATE Users SET Name = @Name WHERE Id = @Id",
+				new { Id = userId, Name = "Jane" },
+				key: userId,
+				when: () => shouldUpdate)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		var user = conn.QuerySingle<UserDto>(
+			"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+			new { Id = userId });
+		Assert.AreEqual("Jane", user.Name);
+	}
+
+	[TestMethod]
+	public async Task UpdateIfAsync_WithWhenFalse_SkipsUpdate() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+		var shouldUpdate = false;
+
+		// Act - Start chain with conditional update that should be skipped
+		var result = await conn.ExecuteTransactionAsync(ctx =>
+			ctx.UpdateIfAsync(
+				"UPDATE Users SET Name = @Name WHERE Id = @Id",
+				new { Id = userId, Name = "Jane" },
+				key: userId,
+				when: () => shouldUpdate)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess, "Result should be successful even when update is skipped");
+		var user = conn.QuerySingle<UserDto>(
+			"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+			new { Id = userId });
+		Assert.AreEqual("John", user.Name, "Name should not have changed");
+	}
+
+	[TestMethod]
+	public async Task UpdateIfAndReturnAsync_WithWhenTrue_ExecutesUpdateAndReturnsValue() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+		var shouldUpdate = true;
+
+		// Act - Start chain with conditional update that returns a value
+		var result = await conn.ExecuteTransactionAsync<string>(ctx =>
+			ctx.UpdateIfAndReturnAsync(
+				"UPDATE Users SET Name = @Name WHERE Id = @Id",
+				new { Id = userId, Name = "Jane" },
+				key: userId,
+				resultSelector: () => "updated",
+				when: () => shouldUpdate)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		Assert.AreEqual("updated", result.Value);
+		var user = conn.QuerySingle<UserDto>(
+			"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+			new { Id = userId });
+		Assert.AreEqual("Jane", user.Name);
+	}
+
+	[TestMethod]
+	public async Task UpdateIfAndReturnAsync_WithWhenFalse_SkipsUpdateButReturnsValue() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+		var shouldUpdate = false;
+
+		// Act - Start chain with conditional update that should be skipped
+		var result = await conn.ExecuteTransactionAsync<string>(ctx =>
+			ctx.UpdateIfAndReturnAsync(
+				"UPDATE Users SET Name = @Name WHERE Id = @Id",
+				new { Id = userId, Name = "Jane" },
+				key: userId,
+				resultSelector: () => "skipped",
+				when: () => shouldUpdate)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		Assert.AreEqual("skipped", result.Value, "Result selector should still be called when update is skipped");
+		var user = conn.QuerySingle<UserDto>(
+			"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+			new { Id = userId });
+		Assert.AreEqual("John", user.Name, "Name should not have changed");
+	}
+
+	[TestMethod]
+	public async Task DeleteIfAsync_WithWhenTrue_ExecutesDelete() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+		var shouldDelete = true;
+
+		// Act - Start chain with conditional delete
+		var result = await conn.ExecuteTransactionAsync(ctx =>
+			ctx.DeleteIfAsync(
+				"DELETE FROM Users WHERE Id = @Id",
+				new { Id = userId },
+				key: userId,
+				when: () => shouldDelete)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		var user = conn.QuerySingleOrDefault<UserDto>(
+			"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+			new { Id = userId });
+		Assert.IsNull(user, "User should have been deleted");
+	}
+
+	[TestMethod]
+	public async Task DeleteIfAsync_WithWhenFalse_SkipsDelete() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+		var shouldDelete = false;
+
+		// Act - Start chain with conditional delete that should be skipped
+		var result = await conn.ExecuteTransactionAsync(ctx =>
+			ctx.DeleteIfAsync(
+				"DELETE FROM Users WHERE Id = @Id",
+				new { Id = userId },
+				key: userId,
+				when: () => shouldDelete)
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess, "Result should be successful even when delete is skipped");
+		var user = conn.QuerySingleOrDefault<UserDto>(
+			"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+			new { Id = userId });
+		Assert.IsNotNull(user, "User should still exist");
+	}
+
+	[TestMethod]
+	public async Task InsertIfAsync_CanChainWithOtherOperations() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		var orderId = Guid.NewGuid().ToString();
+		var shouldInsertUser = true;
+
+		// Act - Start with conditional insert, then chain to unconditional insert
+		var result = await conn.ExecuteTransactionAsync(ctx =>
+			ctx.InsertIfAsync(
+				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+				new { Id = userId, Name = "John", Email = "john@test.com" },
+				when: () => shouldInsertUser)
+			.ThenInsertAsync(
+				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
+				new { Id = orderId, UserId = userId, Amount = 100.0 })
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		var user = conn.QuerySingleOrDefault<UserDto>(
+			"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+			new { Id = userId });
+		Assert.IsNotNull(user);
+		var order = conn.QuerySingleOrDefault<OrderDto>(
+			"SELECT Id, UserId, Amount FROM Orders WHERE Id = @Id",
+			new { Id = orderId });
+		Assert.IsNotNull(order);
+	}
+
+	[TestMethod]
+	public async Task InsertIfAsync_WhenSkipped_CanStillChainWithOtherOperations() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		var orderId = Guid.NewGuid().ToString();
+		var shouldInsertUser = false;
+
+		// First insert the user directly so the order insert can succeed
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+
+		// Act - Start with conditional insert (skipped), then chain to unconditional insert
+		var result = await conn.ExecuteTransactionAsync(ctx =>
+			ctx.InsertIfAsync(
+				"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+				new { Id = "different-id", Name = "Jane", Email = "jane@test.com" },
+				when: () => shouldInsertUser)
+			.ThenInsertAsync(
+				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
+				new { Id = orderId, UserId = userId, Amount = 100.0 })
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		// The conditional user should not exist
+		var jane = conn.QuerySingleOrDefault<UserDto>(
+			"SELECT Id, Name, Email FROM Users WHERE Name = 'Jane'");
+		Assert.IsNull(jane, "Conditional insert should have been skipped");
+		// But the order should exist
+		var order = conn.QuerySingleOrDefault<OrderDto>(
+			"SELECT Id, UserId, Amount FROM Orders WHERE Id = @Id",
+			new { Id = orderId });
+		Assert.IsNotNull(order, "Chain should continue after skipped insert");
+	}
+
+	#endregion
+
 	#region Test DTOs
 
 	private record UserDto(string Id, string Name, string Email);

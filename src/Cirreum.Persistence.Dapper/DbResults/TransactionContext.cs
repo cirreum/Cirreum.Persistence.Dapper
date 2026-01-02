@@ -104,6 +104,105 @@ public readonly struct TransactionContext(
 		string? foreignKeyMessage = "Referenced record does not exist")
 		=> new(this, connection.InsertAsync(sql, parameters, resultSelector, uniqueConstraintMessage, foreignKeyMessage, transaction, cancellationToken));
 
+	/// <summary>
+	/// Conditionally executes an INSERT command and returns a chainable result.
+	/// If <paramref name="when"/> returns false, the insert is skipped and a successful result is returned.
+	/// </summary>
+	/// <param name="sql">The SQL INSERT statement to execute.</param>
+	/// <param name="when">A predicate that determines whether to execute the insert.</param>
+	/// <param name="uniqueConstraintMessage">The error message to use if a unique constraint violation occurs.</param>
+	/// <param name="foreignKeyMessage">The error message to use if a foreign key violation occurs.</param>
+	/// <returns>A <see cref="DbResult"/> that can be chained with other database operations.</returns>
+	public DbResult InsertIfAsync(
+		string sql,
+		Func<bool> when,
+		string uniqueConstraintMessage = "Record already exists",
+		string? foreignKeyMessage = "Referenced record does not exist")
+		=> new(this, InsertIfAsyncCore(sql, null, when, uniqueConstraintMessage, foreignKeyMessage));
+
+	/// <summary>
+	/// Conditionally executes an INSERT command and returns a chainable result.
+	/// If <paramref name="when"/> returns false, the insert is skipped and a successful result is returned.
+	/// </summary>
+	/// <param name="sql">The SQL INSERT statement to execute.</param>
+	/// <param name="parameters">An object containing the parameters to be passed to the SQL command.</param>
+	/// <param name="when">A predicate that determines whether to execute the insert.</param>
+	/// <param name="uniqueConstraintMessage">The error message to use if a unique constraint violation occurs.</param>
+	/// <param name="foreignKeyMessage">The error message to use if a foreign key violation occurs.</param>
+	/// <returns>A <see cref="DbResult"/> that can be chained with other database operations.</returns>
+	public DbResult InsertIfAsync(
+		string sql,
+		object? parameters,
+		Func<bool> when,
+		string uniqueConstraintMessage = "Record already exists",
+		string? foreignKeyMessage = "Referenced record does not exist")
+		=> new(this, InsertIfAsyncCore(sql, parameters, when, uniqueConstraintMessage, foreignKeyMessage));
+
+	/// <summary>
+	/// Conditionally executes an INSERT command and returns the specified value on success.
+	/// If <paramref name="when"/> returns false, the insert is skipped and the result from <paramref name="resultSelector"/> is returned.
+	/// </summary>
+	/// <typeparam name="T">The type of the value to return on success.</typeparam>
+	/// <param name="sql">The SQL INSERT statement to execute.</param>
+	/// <param name="resultSelector">A function that returns the value to include in the successful result.</param>
+	/// <param name="when">A predicate that determines whether to execute the insert.</param>
+	/// <param name="uniqueConstraintMessage">The error message to use if a unique constraint violation occurs.</param>
+	/// <param name="foreignKeyMessage">The error message to use if a foreign key violation occurs.</param>
+	/// <returns>A <see cref="DbResult{T}"/> that can be chained with other database operations.</returns>
+	public DbResult<T> InsertIfAndReturnAsync<T>(
+		string sql,
+		Func<T> resultSelector,
+		Func<bool> when,
+		string uniqueConstraintMessage = "Record already exists",
+		string? foreignKeyMessage = "Referenced record does not exist")
+		=> new(this, InsertIfAndReturnAsyncCore(sql, null, resultSelector, when, uniqueConstraintMessage, foreignKeyMessage));
+
+	/// <summary>
+	/// Conditionally executes an INSERT command and returns the specified value on success.
+	/// If <paramref name="when"/> returns false, the insert is skipped and the result from <paramref name="resultSelector"/> is returned.
+	/// </summary>
+	/// <typeparam name="T">The type of the value to return on success.</typeparam>
+	/// <param name="sql">The SQL INSERT statement to execute.</param>
+	/// <param name="parameters">An object containing the parameters to be passed to the SQL command.</param>
+	/// <param name="resultSelector">A function that returns the value to include in the successful result.</param>
+	/// <param name="when">A predicate that determines whether to execute the insert.</param>
+	/// <param name="uniqueConstraintMessage">The error message to use if a unique constraint violation occurs.</param>
+	/// <param name="foreignKeyMessage">The error message to use if a foreign key violation occurs.</param>
+	/// <returns>A <see cref="DbResult{T}"/> that can be chained with other database operations.</returns>
+	public DbResult<T> InsertIfAndReturnAsync<T>(
+		string sql,
+		object? parameters,
+		Func<T> resultSelector,
+		Func<bool> when,
+		string uniqueConstraintMessage = "Record already exists",
+		string? foreignKeyMessage = "Referenced record does not exist")
+		=> new(this, InsertIfAndReturnAsyncCore(sql, parameters, resultSelector, when, uniqueConstraintMessage, foreignKeyMessage));
+
+	private async Task<Result> InsertIfAsyncCore(
+		string sql,
+		object? parameters,
+		Func<bool> when,
+		string uniqueConstraintMessage,
+		string? foreignKeyMessage) {
+		if (!when()) {
+			return Result.Success;
+		}
+		return await connection.InsertAsync(sql, parameters, uniqueConstraintMessage, foreignKeyMessage, transaction, cancellationToken).ConfigureAwait(false);
+	}
+
+	private async Task<Result<T>> InsertIfAndReturnAsyncCore<T>(
+		string sql,
+		object? parameters,
+		Func<T> resultSelector,
+		Func<bool> when,
+		string uniqueConstraintMessage,
+		string? foreignKeyMessage) {
+		if (!when()) {
+			return resultSelector();
+		}
+		return await connection.InsertAsync(sql, parameters, resultSelector, uniqueConstraintMessage, foreignKeyMessage, transaction, cancellationToken).ConfigureAwait(false);
+	}
+
 	#endregion
 
 	#region Update
@@ -145,6 +244,76 @@ public readonly struct TransactionContext(
 		string? foreignKeyMessage = "Referenced record does not exist")
 		=> new(this, connection.UpdateAsync(sql, parameters, key, resultSelector, uniqueConstraintMessage, foreignKeyMessage, transaction, cancellationToken));
 
+	/// <summary>
+	/// Conditionally executes an UPDATE command and returns a chainable result.
+	/// If <paramref name="when"/> returns false, the update is skipped and a successful result is returned.
+	/// </summary>
+	/// <param name="sql">The SQL UPDATE statement to execute.</param>
+	/// <param name="parameters">An object containing the parameters to be passed to the SQL command.</param>
+	/// <param name="key">The key of the entity being updated.</param>
+	/// <param name="when">A predicate that determines whether to execute the update.</param>
+	/// <param name="uniqueConstraintMessage">The error message to use if a unique constraint violation occurs.</param>
+	/// <param name="foreignKeyMessage">The error message to use if a foreign key violation occurs.</param>
+	/// <returns>A <see cref="DbResult"/> that can be chained with other database operations.</returns>
+	public DbResult UpdateIfAsync(
+		string sql,
+		object? parameters,
+		object key,
+		Func<bool> when,
+		string uniqueConstraintMessage = "Record already exists",
+		string? foreignKeyMessage = "Referenced record does not exist")
+		=> new(this, UpdateIfAsyncCore(sql, parameters, key, when, uniqueConstraintMessage, foreignKeyMessage));
+
+	/// <summary>
+	/// Conditionally executes an UPDATE command and returns the specified value on success.
+	/// If <paramref name="when"/> returns false, the update is skipped and the result from <paramref name="resultSelector"/> is returned.
+	/// </summary>
+	/// <typeparam name="T">The type of the value to return on success.</typeparam>
+	/// <param name="sql">The SQL UPDATE statement to execute.</param>
+	/// <param name="parameters">An object containing the parameters to be passed to the SQL command.</param>
+	/// <param name="key">The key of the entity being updated.</param>
+	/// <param name="resultSelector">A function that returns the value to include in the successful result.</param>
+	/// <param name="when">A predicate that determines whether to execute the update.</param>
+	/// <param name="uniqueConstraintMessage">The error message to use if a unique constraint violation occurs.</param>
+	/// <param name="foreignKeyMessage">The error message to use if a foreign key violation occurs.</param>
+	/// <returns>A <see cref="DbResult{T}"/> that can be chained with other database operations.</returns>
+	public DbResult<T> UpdateIfAndReturnAsync<T>(
+		string sql,
+		object? parameters,
+		object key,
+		Func<T> resultSelector,
+		Func<bool> when,
+		string uniqueConstraintMessage = "Record already exists",
+		string? foreignKeyMessage = "Referenced record does not exist")
+		=> new(this, UpdateIfAndReturnAsyncCore(sql, parameters, key, resultSelector, when, uniqueConstraintMessage, foreignKeyMessage));
+
+	private async Task<Result> UpdateIfAsyncCore(
+		string sql,
+		object? parameters,
+		object key,
+		Func<bool> when,
+		string uniqueConstraintMessage,
+		string? foreignKeyMessage) {
+		if (!when()) {
+			return Result.Success;
+		}
+		return await connection.UpdateAsync(sql, parameters, key, uniqueConstraintMessage, foreignKeyMessage, transaction, cancellationToken).ConfigureAwait(false);
+	}
+
+	private async Task<Result<T>> UpdateIfAndReturnAsyncCore<T>(
+		string sql,
+		object? parameters,
+		object key,
+		Func<T> resultSelector,
+		Func<bool> when,
+		string uniqueConstraintMessage,
+		string? foreignKeyMessage) {
+		if (!when()) {
+			return resultSelector();
+		}
+		return await connection.UpdateAsync(sql, parameters, key, resultSelector, uniqueConstraintMessage, foreignKeyMessage, transaction, cancellationToken).ConfigureAwait(false);
+	}
+
 	#endregion
 
 	#region Delete
@@ -163,6 +332,36 @@ public readonly struct TransactionContext(
 		object key,
 		string foreignKeyMessage = "Cannot delete, record is in use")
 		=> new(this, connection.DeleteAsync(sql, parameters, key, foreignKeyMessage, transaction, cancellationToken));
+
+	/// <summary>
+	/// Conditionally executes a DELETE command and returns a chainable result.
+	/// If <paramref name="when"/> returns false, the delete is skipped and a successful result is returned.
+	/// </summary>
+	/// <param name="sql">The SQL DELETE statement to execute.</param>
+	/// <param name="parameters">An object containing the parameters to be passed to the SQL command.</param>
+	/// <param name="key">The key of the entity being deleted.</param>
+	/// <param name="when">A predicate that determines whether to execute the delete.</param>
+	/// <param name="foreignKeyMessage">The error message to use if a foreign key violation occurs.</param>
+	/// <returns>A <see cref="DbResult"/> that can be chained with other database operations.</returns>
+	public DbResult DeleteIfAsync(
+		string sql,
+		object? parameters,
+		object key,
+		Func<bool> when,
+		string foreignKeyMessage = "Cannot delete, record is in use")
+		=> new(this, DeleteIfAsyncCore(sql, parameters, key, when, foreignKeyMessage));
+
+	private async Task<Result> DeleteIfAsyncCore(
+		string sql,
+		object? parameters,
+		object key,
+		Func<bool> when,
+		string foreignKeyMessage) {
+		if (!when()) {
+			return Result.Success;
+		}
+		return await connection.DeleteAsync(sql, parameters, key, foreignKeyMessage, transaction, cancellationToken).ConfigureAwait(false);
+	}
 
 	#endregion
 

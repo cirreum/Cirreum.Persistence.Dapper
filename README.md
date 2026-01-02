@@ -266,6 +266,24 @@ public async Task<Result<OrderDto>> CreateOrderWithItemsAsync(
 
 ### Available Chain Methods
 
+**From `TransactionContext` (starting point):**
+- `GetAsync<T>(...)` - Query single record
+- `GetScalarAsync<T>(...)` - Query scalar value
+- `QueryAnyAsync<T>(...)` - Query collection
+- `QueryPagedAsync<T>(...)` - Query with offset pagination
+- `QueryCursorAsync<T>(...)` - Query with cursor pagination
+- `QuerySliceAsync<T>(...)` - Query slice with "has more" indicator
+- `InsertAsync(...)` - Insert, returns `DbResult`
+- `InsertAndReturnAsync<T>(...)` - Insert, returns `DbResult<T>`
+- `InsertIfAsync(..., when)` - Conditional insert, returns `DbResult`
+- `InsertIfAndReturnAsync<T>(..., when)` - Conditional insert, returns `DbResult<T>`
+- `UpdateAsync(...)` - Update, returns `DbResult`
+- `UpdateAndReturnAsync<T>(...)` - Update, returns `DbResult<T>`
+- `UpdateIfAsync(..., when)` - Conditional update, returns `DbResult`
+- `UpdateIfAndReturnAsync<T>(..., when)` - Conditional update, returns `DbResult<T>`
+- `DeleteAsync(...)` - Delete, returns `DbResult`
+- `DeleteIfAsync(..., when)` - Conditional delete, returns `DbResult`
+
 **From `DbResult<T>` (typed result):**
 - `MapAsync(Func<T, TResult>)` - Transform the value
 - `EnsureAsync(Func<T, bool>, Exception)` - Validate with predicate
@@ -355,7 +373,24 @@ return await conn.ExecuteTransactionAsync(ctx =>
 
 ### Conditional Operations
 
-The `ThenInsertIfAsync`, `ThenUpdateIfAsync`, and `ThenDeleteIfAsync` methods allow conditional execution. If the `when` predicate returns `false`, the operation is skipped and the chain continues.
+Conditional operations allow you to skip database commands based on a predicate. If `when` returns `false`, the operation is skipped and the chain continues with a successful result.
+
+**Starting with a conditional operation** - Use `InsertIfAsync`, `UpdateIfAsync`, or `DeleteIfAsync` on `TransactionContext`:
+
+```csharp
+var request = new { ShouldCreateOrder = true, ShouldNotify = false };
+
+return await conn.ExecuteTransactionAsync(ctx =>
+    ctx.InsertIfAsync(
+        "INSERT INTO Orders (OrderId, CustomerId) VALUES (@OrderId, @CustomerId)",
+        new { OrderId = orderId, CustomerId = customerId },
+        when: () => request.ShouldCreateOrder)  // Only insert if flag is set
+    .ThenInsertIfAsync(
+        "INSERT INTO Notifications (...) VALUES (...)",
+        new { ... },
+        when: () => request.ShouldNotify)  // Skipped when false
+, ct);
+```
 
 **From `DbResult<T>`** - The predicate receives the current value:
 
