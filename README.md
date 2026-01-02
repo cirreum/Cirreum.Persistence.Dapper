@@ -320,7 +320,7 @@ return await conn.ExecuteTransactionAsync(ctx =>
 
 ### Conditional Operations
 
-The `when:` parameter on mutation methods (`ThenInsertAsync`, `ThenUpdateAsync`, `ThenDeleteAsync`) allows conditional execution based on the current value. If the predicate returns `false`, the operation is skipped and the chain continues:
+The `when:` parameter on mutation methods (`ThenInsertAsync`, `ThenUpdateAsync`, `ThenDeleteAsync`) allows conditional execution based on the current value. If the predicate returns `false`, the operation is skipped and the chain continues with the current value (pass-through):
 
 ```csharp
 return await conn.ExecuteTransactionAsync(ctx =>
@@ -331,24 +331,16 @@ return await conn.ExecuteTransactionAsync(ctx =>
     .ThenInsertAsync(
         "INSERT INTO AuditLog (CustomerId, Action, CreatedAt) VALUES (@CustomerId, @Action, @CreatedAt)",
         c => new { c.CustomerId, Action = "Accessed", CreatedAt = DateTime.UtcNow },
-        when: c => c.TrackActivity)  // Only insert audit log if tracking is enabled
+        when: c => c.TrackActivity)  // Only insert audit log if tracking is enabled; customer passes through
     .ThenUpdateAsync(
         "UPDATE Customers SET LastAccessedAt = @LastAccessedAt WHERE CustomerId = @CustomerId",
         c => new { c.CustomerId, LastAccessedAt = DateTime.UtcNow },
         customerId,
-        when: c => c.IsActive)  // Only update if customer is active
+        when: c => c.IsActive)  // Only update if customer is active; customer passes through
 , ct);
 ```
 
-For generic methods that return a value, use a result selector to preserve the chain type:
-
-```csharp
-.ThenInsertAsync(
-    "INSERT INTO Orders (...) VALUES (...)",
-    user => new { OrderId = orderId, user.Id, ... },
-    () => user,  // Return user to preserve type for next operation
-    when: user => user.CanCreateOrders)
-```
+When `when:` returns `false`, the operation is skipped and the current value passes through unchanged - no result selector is needed.
 
 ### Error Short-Circuiting
 

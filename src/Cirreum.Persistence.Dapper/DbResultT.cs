@@ -108,20 +108,35 @@ public readonly struct DbResult<T>(TransactionContext builder, Task<Result<T>> r
 		=> new(builder, this.ThenInsertAsyncCore(sql, parameters, uniqueConstraintMessage, foreignKeyMessage));
 
 	/// <summary>
-	/// Chains an INSERT operation after a successful result.
+	/// Chains an INSERT operation after a successful result, using the previous value to build parameters.
 	/// </summary>
 	/// <param name="sql">The INSERT SQL statement.</param>
 	/// <param name="parametersFactory">Factory to create parameters from the current value.</param>
-	/// <param name="when">Optional predicate; if false, the insert is skipped and the chain continues.</param>
 	/// <param name="uniqueConstraintMessage">Error message for unique constraint violations.</param>
 	/// <param name="foreignKeyMessage">Error message for foreign key violations.</param>
 	public DbResult ThenInsertAsync(
 		string sql,
 		Func<T, object?> parametersFactory,
-		Func<T, bool>? when = null,
 		string uniqueConstraintMessage = "Record already exists",
 		string? foreignKeyMessage = "Referenced record does not exist")
-		=> new(builder, this.ThenInsertAsyncCore(sql, parametersFactory, when, uniqueConstraintMessage, foreignKeyMessage));
+		=> new(builder, this.ThenInsertAsyncCoreNonGeneric(sql, parametersFactory, uniqueConstraintMessage, foreignKeyMessage));
+
+	/// <summary>
+	/// Chains an INSERT operation after a successful result with conditional execution.
+	/// If <paramref name="when"/> returns false, the insert is skipped and the chain continues with the current value.
+	/// </summary>
+	/// <param name="sql">The INSERT SQL statement.</param>
+	/// <param name="parametersFactory">Factory to create parameters from the current value.</param>
+	/// <param name="when">Predicate that determines whether to execute the insert; if false, the insert is skipped and the current value passes through.</param>
+	/// <param name="uniqueConstraintMessage">Error message for unique constraint violations.</param>
+	/// <param name="foreignKeyMessage">Error message for foreign key violations.</param>
+	public DbResult<T> ThenInsertAsync(
+		string sql,
+		Func<T, object?> parametersFactory,
+		Func<T, bool> when,
+		string uniqueConstraintMessage = "Record already exists",
+		string? foreignKeyMessage = "Referenced record does not exist")
+		=> new(builder, this.ThenInsertAsyncCorePassThrough(sql, parametersFactory, when, uniqueConstraintMessage, foreignKeyMessage));
 
 	/// <summary>
 	/// Chains an INSERT operation that returns a value after a successful result, using the previous value to build parameters.
@@ -150,14 +165,31 @@ public readonly struct DbResult<T>(TransactionContext builder, Task<Result<T>> r
 	/// <param name="sql">The INSERT SQL statement.</param>
 	/// <param name="parametersFactory">Factory to create parameters from the current value.</param>
 	/// <param name="resultSelector">Factory to create the result value after successful insert.</param>
-	/// <param name="when">Optional predicate; if false, the insert is skipped and the chain continues with the result from resultSelector.</param>
 	/// <param name="uniqueConstraintMessage">Error message for unique constraint violations.</param>
 	/// <param name="foreignKeyMessage">Error message for foreign key violations.</param>
 	public DbResult<TResult> ThenInsertAsync<TResult>(
 		string sql,
 		Func<T, object?> parametersFactory,
 		Func<TResult> resultSelector,
-		Func<T, bool>? when = null,
+		string uniqueConstraintMessage = "Record already exists",
+		string? foreignKeyMessage = "Referenced record does not exist")
+		=> new(builder, this.ThenInsertAsyncCoreWithResultSelector(sql, parametersFactory, resultSelector, uniqueConstraintMessage, foreignKeyMessage));
+
+	/// <summary>
+	/// Chains an INSERT operation that returns a value after a successful result, using the previous value to build parameters.
+	/// If <paramref name="when"/> returns false, the insert is skipped and the chain continues with the result from <paramref name="resultSelector"/>.
+	/// </summary>
+	/// <param name="sql">The INSERT SQL statement.</param>
+	/// <param name="parametersFactory">Factory to create parameters from the current value.</param>
+	/// <param name="resultSelector">Factory to create the result value from the current value, called after successful insert or when skipped.</param>
+	/// <param name="when">Predicate that determines whether to execute the insert; if false, the insert is skipped.</param>
+	/// <param name="uniqueConstraintMessage">Error message for unique constraint violations.</param>
+	/// <param name="foreignKeyMessage">Error message for foreign key violations.</param>
+	public DbResult<TResult> ThenInsertAsync<TResult>(
+		string sql,
+		Func<T, object?> parametersFactory,
+		Func<T, TResult> resultSelector,
+		Func<T, bool> when,
 		string uniqueConstraintMessage = "Record already exists",
 		string? foreignKeyMessage = "Referenced record does not exist")
 		=> new(builder, this.ThenInsertAsyncCore(sql, parametersFactory, resultSelector, when, uniqueConstraintMessage, foreignKeyMessage));
@@ -186,21 +218,37 @@ public readonly struct DbResult<T>(TransactionContext builder, Task<Result<T>> r
 		return await builder.InsertAsync(sql, parameters, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
 	}
 
-	private async Task<Result> ThenInsertAsyncCore(
+	private async Task<Result> ThenInsertAsyncCoreNonGeneric(
 		string sql,
 		Func<T, object?> parametersFactory,
-		Func<T, bool>? when,
 		string uniqueConstraintMessage,
 		string? foreignKeyMessage) {
 		var result = await resultTask.ConfigureAwait(false);
 		if (result.IsFailure) {
 			return Cirreum.Result.Fail(result.Error);
 		}
-		// Skip if when predicate returns false
-		if (when is not null && !when(result.Value)) {
-			return Cirreum.Result.Success;
-		}
 		return await builder.InsertAsync(sql, parametersFactory(result.Value), uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
+	}
+
+	private async Task<Result<T>> ThenInsertAsyncCorePassThrough(
+		string sql,
+		Func<T, object?> parametersFactory,
+		Func<T, bool> when,
+		string uniqueConstraintMessage,
+		string? foreignKeyMessage) {
+		var result = await resultTask.ConfigureAwait(false);
+		if (result.IsFailure) {
+			return result.Error;
+		}
+		// Skip if when predicate returns false, pass through the current value
+		if (!when(result.Value)) {
+			return result.Value;
+		}
+		var insertResult = await builder.InsertAsync(sql, parametersFactory(result.Value), uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
+		if (insertResult.IsFailure) {
+			return insertResult.Error;
+		}
+		return result.Value;
 	}
 
 	private async Task<Result<TResult>> ThenInsertAsyncCore<TResult>(
@@ -228,22 +276,43 @@ public readonly struct DbResult<T>(TransactionContext builder, Task<Result<T>> r
 		return await builder.InsertAsync(sql, parameters, resultSelector, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
 	}
 
-	private async Task<Result<TResult>> ThenInsertAsyncCore<TResult>(
+	private async Task<Result<TResult>> ThenInsertAsyncCoreWithResultSelector<TResult>(
 		string sql,
 		Func<T, object?> parametersFactory,
 		Func<TResult> resultSelector,
-		Func<T, bool>? when,
 		string uniqueConstraintMessage,
 		string? foreignKeyMessage) {
 		var result = await resultTask.ConfigureAwait(false);
 		if (result.IsFailure) {
 			return result.Error;
 		}
-		// Skip if when predicate returns false, but still call resultSelector to continue the chain
-		if (when is not null && !when(result.Value)) {
-			return resultSelector();
+		var insertResult = await builder.InsertAsync(sql, parametersFactory(result.Value), uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
+		if (insertResult.IsFailure) {
+			return insertResult.Error;
 		}
-		return await builder.InsertAsync(sql, parametersFactory(result.Value), resultSelector, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
+		return resultSelector();
+	}
+
+	private async Task<Result<TResult>> ThenInsertAsyncCore<TResult>(
+		string sql,
+		Func<T, object?> parametersFactory,
+		Func<T, TResult> resultSelector,
+		Func<T, bool> when,
+		string uniqueConstraintMessage,
+		string? foreignKeyMessage) {
+		var result = await resultTask.ConfigureAwait(false);
+		if (result.IsFailure) {
+			return result.Error;
+		}
+		// Skip if when predicate returns false, call resultSelector with current value to continue the chain
+		if (!when(result.Value)) {
+			return resultSelector(result.Value);
+		}
+		var insertResult = await builder.InsertAsync(sql, parametersFactory(result.Value), uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
+		if (insertResult.IsFailure) {
+			return insertResult.Error;
+		}
+		return resultSelector(result.Value);
 	}
 
 	#endregion
@@ -267,17 +336,34 @@ public readonly struct DbResult<T>(TransactionContext builder, Task<Result<T>> r
 	/// <param name="sql">The UPDATE SQL statement.</param>
 	/// <param name="parametersFactory">Factory to create parameters from the current value.</param>
 	/// <param name="key">The key for not-found error messages.</param>
-	/// <param name="when">Optional predicate; if false, the update is skipped and the chain continues.</param>
 	/// <param name="uniqueConstraintMessage">Error message for unique constraint violations.</param>
 	/// <param name="foreignKeyMessage">Error message for foreign key violations.</param>
 	public DbResult ThenUpdateAsync(
 		string sql,
 		Func<T, object?> parametersFactory,
 		object key,
-		Func<T, bool>? when = null,
 		string uniqueConstraintMessage = "Record already exists",
 		string? foreignKeyMessage = "Referenced record does not exist")
-		=> new(builder, this.ThenUpdateAsyncCore(sql, parametersFactory, key, when, uniqueConstraintMessage, foreignKeyMessage));
+		=> new(builder, this.ThenUpdateAsyncCoreNonGeneric(sql, parametersFactory, key, uniqueConstraintMessage, foreignKeyMessage));
+
+	/// <summary>
+	/// Chains an UPDATE operation after a successful result with conditional execution.
+	/// If <paramref name="when"/> returns false, the update is skipped and the chain continues with the current value.
+	/// </summary>
+	/// <param name="sql">The UPDATE SQL statement.</param>
+	/// <param name="parametersFactory">Factory to create parameters from the current value.</param>
+	/// <param name="key">The key for not-found error messages.</param>
+	/// <param name="when">Predicate that determines whether to execute the update; if false, the update is skipped and the current value passes through.</param>
+	/// <param name="uniqueConstraintMessage">Error message for unique constraint violations.</param>
+	/// <param name="foreignKeyMessage">Error message for foreign key violations.</param>
+	public DbResult<T> ThenUpdateAsync(
+		string sql,
+		Func<T, object?> parametersFactory,
+		object key,
+		Func<T, bool> when,
+		string uniqueConstraintMessage = "Record already exists",
+		string? foreignKeyMessage = "Referenced record does not exist")
+		=> new(builder, this.ThenUpdateAsyncCorePassThrough(sql, parametersFactory, key, when, uniqueConstraintMessage, foreignKeyMessage));
 
 	/// <summary>
 	/// Chains an UPDATE operation that returns a value after a successful result.
@@ -297,8 +383,7 @@ public readonly struct DbResult<T>(TransactionContext builder, Task<Result<T>> r
 	/// <param name="sql">The UPDATE SQL statement.</param>
 	/// <param name="parametersFactory">Factory to create parameters from the current value.</param>
 	/// <param name="key">The key for not-found error messages.</param>
-	/// <param name="resultSelector">Factory to create the result value after successful update.</param>
-	/// <param name="when">Optional predicate; if false, the update is skipped and the chain continues with the result from resultSelector.</param>
+	/// <param name="resultSelector">Factory to create the result value.</param>
 	/// <param name="uniqueConstraintMessage">Error message for unique constraint violations.</param>
 	/// <param name="foreignKeyMessage">Error message for foreign key violations.</param>
 	public DbResult<TResult> ThenUpdateAsync<TResult>(
@@ -306,7 +391,27 @@ public readonly struct DbResult<T>(TransactionContext builder, Task<Result<T>> r
 		Func<T, object?> parametersFactory,
 		object key,
 		Func<TResult> resultSelector,
-		Func<T, bool>? when = null,
+		string uniqueConstraintMessage = "Record already exists",
+		string? foreignKeyMessage = "Referenced record does not exist")
+		=> new(builder, this.ThenUpdateAsyncCoreWithResultSelector(sql, parametersFactory, key, resultSelector, uniqueConstraintMessage, foreignKeyMessage));
+
+	/// <summary>
+	/// Chains an UPDATE operation that returns a value after a successful result, using the previous value to build parameters.
+	/// If <paramref name="when"/> returns false, the update is skipped and the chain continues with the result from <paramref name="resultSelector"/>.
+	/// </summary>
+	/// <param name="sql">The UPDATE SQL statement.</param>
+	/// <param name="parametersFactory">Factory to create parameters from the current value.</param>
+	/// <param name="key">The key for not-found error messages.</param>
+	/// <param name="resultSelector">Factory to create the result value from the current value, called after successful update or when skipped.</param>
+	/// <param name="when">Predicate that determines whether to execute the update; if false, the update is skipped.</param>
+	/// <param name="uniqueConstraintMessage">Error message for unique constraint violations.</param>
+	/// <param name="foreignKeyMessage">Error message for foreign key violations.</param>
+	public DbResult<TResult> ThenUpdateAsync<TResult>(
+		string sql,
+		Func<T, object?> parametersFactory,
+		object key,
+		Func<T, TResult> resultSelector,
+		Func<T, bool> when,
 		string uniqueConstraintMessage = "Record already exists",
 		string? foreignKeyMessage = "Referenced record does not exist")
 		=> new(builder, this.ThenUpdateAsyncCore(sql, parametersFactory, key, resultSelector, when, uniqueConstraintMessage, foreignKeyMessage));
@@ -324,22 +429,39 @@ public readonly struct DbResult<T>(TransactionContext builder, Task<Result<T>> r
 		return await builder.UpdateAsync(sql, parameters, key, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
 	}
 
-	private async Task<Result> ThenUpdateAsyncCore(
+	private async Task<Result> ThenUpdateAsyncCoreNonGeneric(
 		string sql,
 		Func<T, object?> parametersFactory,
 		object key,
-		Func<T, bool>? when,
 		string uniqueConstraintMessage,
 		string? foreignKeyMessage) {
 		var result = await resultTask.ConfigureAwait(false);
 		if (result.IsFailure) {
 			return Cirreum.Result.Fail(result.Error);
 		}
-		// Skip if when predicate returns false
-		if (when is not null && !when(result.Value)) {
-			return Cirreum.Result.Success;
-		}
 		return await builder.UpdateAsync(sql, parametersFactory(result.Value), key, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
+	}
+
+	private async Task<Result<T>> ThenUpdateAsyncCorePassThrough(
+		string sql,
+		Func<T, object?> parametersFactory,
+		object key,
+		Func<T, bool> when,
+		string uniqueConstraintMessage,
+		string? foreignKeyMessage) {
+		var result = await resultTask.ConfigureAwait(false);
+		if (result.IsFailure) {
+			return result.Error;
+		}
+		// Skip if when predicate returns false, pass through the current value
+		if (!when(result.Value)) {
+			return result.Value;
+		}
+		var updateResult = await builder.UpdateAsync(sql, parametersFactory(result.Value), key, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
+		if (updateResult.IsFailure) {
+			return updateResult.Error;
+		}
+		return result.Value;
 	}
 
 	private async Task<Result<TResult>> ThenUpdateAsyncCore<TResult>(
@@ -356,23 +478,45 @@ public readonly struct DbResult<T>(TransactionContext builder, Task<Result<T>> r
 		return await builder.UpdateAsync(sql, parameters, key, resultSelector, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
 	}
 
-	private async Task<Result<TResult>> ThenUpdateAsyncCore<TResult>(
+	private async Task<Result<TResult>> ThenUpdateAsyncCoreWithResultSelector<TResult>(
 		string sql,
 		Func<T, object?> parametersFactory,
 		object key,
 		Func<TResult> resultSelector,
-		Func<T, bool>? when,
 		string uniqueConstraintMessage,
 		string? foreignKeyMessage) {
 		var result = await resultTask.ConfigureAwait(false);
 		if (result.IsFailure) {
 			return result.Error;
 		}
-		// Skip if when predicate returns false, but still call resultSelector to continue the chain
-		if (when is not null && !when(result.Value)) {
-			return resultSelector();
+		var updateResult = await builder.UpdateAsync(sql, parametersFactory(result.Value), key, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
+		if (updateResult.IsFailure) {
+			return updateResult.Error;
 		}
-		return await builder.UpdateAsync(sql, parametersFactory(result.Value), key, resultSelector, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
+		return resultSelector();
+	}
+
+	private async Task<Result<TResult>> ThenUpdateAsyncCore<TResult>(
+		string sql,
+		Func<T, object?> parametersFactory,
+		object key,
+		Func<T, TResult> resultSelector,
+		Func<T, bool> when,
+		string uniqueConstraintMessage,
+		string? foreignKeyMessage) {
+		var result = await resultTask.ConfigureAwait(false);
+		if (result.IsFailure) {
+			return result.Error;
+		}
+		// Skip if when predicate returns false, call resultSelector with current value to continue the chain
+		if (!when(result.Value)) {
+			return resultSelector(result.Value);
+		}
+		var updateResult = await builder.UpdateAsync(sql, parametersFactory(result.Value), key, uniqueConstraintMessage, foreignKeyMessage).Result.ConfigureAwait(false);
+		if (updateResult.IsFailure) {
+			return updateResult.Error;
+		}
+		return resultSelector(result.Value);
 	}
 
 	#endregion
@@ -395,15 +539,30 @@ public readonly struct DbResult<T>(TransactionContext builder, Task<Result<T>> r
 	/// <param name="sql">The DELETE SQL statement.</param>
 	/// <param name="parametersFactory">Factory to create parameters from the current value.</param>
 	/// <param name="key">The key for not-found error messages.</param>
-	/// <param name="when">Optional predicate; if false, the delete is skipped and the chain continues.</param>
 	/// <param name="foreignKeyMessage">Error message for foreign key violations.</param>
 	public DbResult ThenDeleteAsync(
 		string sql,
 		Func<T, object?> parametersFactory,
 		object key,
-		Func<T, bool>? when = null,
 		string foreignKeyMessage = "Cannot delete, record is in use")
-		=> new(builder, this.ThenDeleteAsyncCore(sql, parametersFactory, key, when, foreignKeyMessage));
+		=> new(builder, this.ThenDeleteAsyncCoreNonGeneric(sql, parametersFactory, key, foreignKeyMessage));
+
+	/// <summary>
+	/// Chains a DELETE operation after a successful result with conditional execution.
+	/// If <paramref name="when"/> returns false, the delete is skipped and the chain continues with the current value.
+	/// </summary>
+	/// <param name="sql">The DELETE SQL statement.</param>
+	/// <param name="parametersFactory">Factory to create parameters from the current value.</param>
+	/// <param name="key">The key for not-found error messages.</param>
+	/// <param name="when">Predicate that determines whether to execute the delete; if false, the delete is skipped and the current value passes through.</param>
+	/// <param name="foreignKeyMessage">Error message for foreign key violations.</param>
+	public DbResult<T> ThenDeleteAsync(
+		string sql,
+		Func<T, object?> parametersFactory,
+		object key,
+		Func<T, bool> when,
+		string foreignKeyMessage = "Cannot delete, record is in use")
+		=> new(builder, this.ThenDeleteAsyncCorePassThrough(sql, parametersFactory, key, when, foreignKeyMessage));
 
 	private async Task<Result> ThenDeleteAsyncCore(
 		string sql,
@@ -417,21 +576,37 @@ public readonly struct DbResult<T>(TransactionContext builder, Task<Result<T>> r
 		return await builder.DeleteAsync(sql, parameters, key, foreignKeyMessage).Result.ConfigureAwait(false);
 	}
 
-	private async Task<Result> ThenDeleteAsyncCore(
+	private async Task<Result> ThenDeleteAsyncCoreNonGeneric(
 		string sql,
 		Func<T, object?> parametersFactory,
 		object key,
-		Func<T, bool>? when,
 		string foreignKeyMessage) {
 		var result = await resultTask.ConfigureAwait(false);
 		if (result.IsFailure) {
 			return Cirreum.Result.Fail(result.Error);
 		}
-		// Skip if when predicate returns false
-		if (when is not null && !when(result.Value)) {
-			return Cirreum.Result.Success;
-		}
 		return await builder.DeleteAsync(sql, parametersFactory(result.Value), key, foreignKeyMessage).Result.ConfigureAwait(false);
+	}
+
+	private async Task<Result<T>> ThenDeleteAsyncCorePassThrough(
+		string sql,
+		Func<T, object?> parametersFactory,
+		object key,
+		Func<T, bool> when,
+		string foreignKeyMessage) {
+		var result = await resultTask.ConfigureAwait(false);
+		if (result.IsFailure) {
+			return result.Error;
+		}
+		// Skip if when predicate returns false, pass through the current value
+		if (!when(result.Value)) {
+			return result.Value;
+		}
+		var deleteResult = await builder.DeleteAsync(sql, parametersFactory(result.Value), key, foreignKeyMessage).Result.ConfigureAwait(false);
+		if (deleteResult.IsFailure) {
+			return deleteResult.Error;
+		}
+		return result.Value;
 	}
 
 	#endregion

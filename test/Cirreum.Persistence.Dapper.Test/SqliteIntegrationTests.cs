@@ -1604,8 +1604,8 @@ public sealed class SqliteIntegrationTests {
 		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 			new { Id = userId, Name = "John", Email = "john@test.com" });
 
-		// Act
-		var result = await conn.ExecuteTransactionAsync(ctx =>
+		// Act - Using generic ExecuteTransactionAsync because when: returns DbResult<T> (pass-through)
+		var result = await conn.ExecuteTransactionAsync<UserDto>(ctx =>
 			ctx.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -1635,8 +1635,8 @@ public sealed class SqliteIntegrationTests {
 		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 			new { Id = userId, Name = "John", Email = "john@test.com" });
 
-		// Act
-		var result = await conn.ExecuteTransactionAsync(ctx =>
+		// Act - Using generic ExecuteTransactionAsync because when: returns DbResult<T> (pass-through)
+		var result = await conn.ExecuteTransactionAsync<UserDto>(ctx =>
 			ctx.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -1666,7 +1666,8 @@ public sealed class SqliteIntegrationTests {
 			new { Id = userId, Name = "John", Email = "john@test.com" });
 
 		// Act - Only insert order if user name is "Admin"
-		var result = await conn.ExecuteTransactionAsync(ctx =>
+		// Using generic ExecuteTransactionAsync because when: returns DbResult<T> (pass-through)
+		var result = await conn.ExecuteTransactionAsync<UserDto>(ctx =>
 			ctx.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -1695,7 +1696,7 @@ public sealed class SqliteIntegrationTests {
 		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 			new { Id = userId, Name = "John", Email = "john@test.com" });
 
-		// Act
+		// Act - when: with resultSelector, resultSelector is Func<T, TResult>
 		var result = await conn.ExecuteTransactionAsync<string>(ctx =>
 			ctx.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
@@ -1704,7 +1705,7 @@ public sealed class SqliteIntegrationTests {
 			.ThenInsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				user => new { Id = orderId, UserId = user.Id, Amount = 100.0 },
-				() => orderId,
+				_ => orderId,  // Func<T, TResult> - receives the current value
 				when: _ => false)  // Skip insert
 		, this.TestContext.CancellationToken);
 
@@ -1726,8 +1727,8 @@ public sealed class SqliteIntegrationTests {
 		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 			new { Id = userId, Name = "John", Email = "john@test.com" });
 
-		// Act
-		var result = await conn.ExecuteTransactionAsync(ctx =>
+		// Act - Using generic ExecuteTransactionAsync because when: returns DbResult<T> (pass-through)
+		var result = await conn.ExecuteTransactionAsync<UserDto>(ctx =>
 			ctx.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -1748,6 +1749,38 @@ public sealed class SqliteIntegrationTests {
 	}
 
 	[TestMethod]
+	public async Task ThenUpdateAsync_WithWhenAndResultSelectorFalse_SkipsUpdate() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+
+
+		// Act - Using generic ExecuteTransactionAsync because when: returns DbResult<T> (pass-through)
+		var result = await conn.ExecuteTransactionAsync<UserLight>(ctx =>
+			ctx.GetAsync<UserDto>(
+				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+				new { Id = userId },
+				userId)
+			.ThenUpdateAsync(
+				"UPDATE Users SET Name = @Name WHERE Id = @Id",
+				user => new { user.Id, Name = "UpdatedName" },
+				userId,
+				user => new UserLight(user.Id, user.Name),  // Result selector
+				when: _ => false)  // Never execute
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		var user = conn.QuerySingle<UserLight>(
+			"SELECT Id, Name FROM Users WHERE Id = @Id",
+			new { Id = userId });
+		Assert.AreEqual("John", user.Name, "Update should have been skipped");
+	}
+
+	[TestMethod]
 	public async Task ThenUpdateAsync_WithWhenTrue_ExecutesUpdate() {
 		// Arrange
 		using var conn = CreateConnection();
@@ -1756,8 +1789,8 @@ public sealed class SqliteIntegrationTests {
 		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 			new { Id = userId, Name = "John", Email = "john@test.com" });
 
-		// Act
-		var result = await conn.ExecuteTransactionAsync(ctx =>
+		// Act - Using generic ExecuteTransactionAsync because when: returns DbResult<T> (pass-through)
+		var result = await conn.ExecuteTransactionAsync<UserDto>(ctx =>
 			ctx.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -1778,6 +1811,37 @@ public sealed class SqliteIntegrationTests {
 	}
 
 	[TestMethod]
+	public async Task ThenUpdateAsync_WithWhenAndResultSelectorTrue_ExecutesUpdate() {
+		// Arrange
+		using var conn = CreateConnection();
+		CreateTestSchema(conn);
+		var userId = Guid.NewGuid().ToString();
+		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
+			new { Id = userId, Name = "John", Email = "john@test.com" });
+
+		// Act - Using generic ExecuteTransactionAsync because when: returns DbResult<T> (pass-through)
+		var result = await conn.ExecuteTransactionAsync<UserLight>(ctx =>
+			ctx.GetAsync<UserDto>(
+				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
+				new { Id = userId },
+				userId)
+			.ThenUpdateAsync(
+				"UPDATE Users SET Name = @Name WHERE Id = @Id",
+				user => new { user.Id, Name = "UpdatedName" },
+				userId,
+				user => new UserLight(user.Id, user.Name),  // Result selector
+				when: _ => true)  // Always execute
+		, this.TestContext.CancellationToken);
+
+		// Assert
+		Assert.IsTrue(result.IsSuccess);
+		var user = conn.QuerySingle<UserLight>(
+			"SELECT Id, Name FROM Users WHERE Id = @Id",
+			new { Id = userId });
+		Assert.AreEqual("UpdatedName", user.Name);
+	}
+
+	[TestMethod]
 	public async Task ThenDeleteAsync_WithWhenFalse_SkipsDelete() {
 		// Arrange
 		using var conn = CreateConnection();
@@ -1786,8 +1850,8 @@ public sealed class SqliteIntegrationTests {
 		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 			new { Id = userId, Name = "John", Email = "john@test.com" });
 
-		// Act
-		var result = await conn.ExecuteTransactionAsync(ctx =>
+		// Act - Using generic ExecuteTransactionAsync because when: returns DbResult<T> (pass-through)
+		var result = await conn.ExecuteTransactionAsync<UserDto>(ctx =>
 			ctx.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -1816,8 +1880,8 @@ public sealed class SqliteIntegrationTests {
 		conn.Execute("INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 			new { Id = userId, Name = "John", Email = "john@test.com" });
 
-		// Act
-		var result = await conn.ExecuteTransactionAsync(ctx =>
+		// Act - Using generic ExecuteTransactionAsync because when: returns DbResult<T> (pass-through)
+		var result = await conn.ExecuteTransactionAsync<UserDto>(ctx =>
 			ctx.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -1849,8 +1913,8 @@ public sealed class SqliteIntegrationTests {
 			new { Id = userId, Name = "Admin", Email = "admin@test.com" });
 
 		// Act - Insert first order only for Admin, skip second order
-		// Using MapAsync to preserve the UserDto type for the second when predicate
-		var result = await conn.ExecuteTransactionAsync(ctx =>
+		// With when:, the current T value passes through automatically - no resultSelector needed
+		var result = await conn.ExecuteTransactionAsync<UserDto>(ctx =>
 			ctx.GetAsync<UserDto>(
 				"SELECT Id, Name, Email FROM Users WHERE Id = @Id",
 				new { Id = userId },
@@ -1858,12 +1922,11 @@ public sealed class SqliteIntegrationTests {
 			.ThenInsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				user => new { Id = orderId1, UserId = user.Id, Amount = 100.0 },
-				() => new UserDto(userId, "Admin", "admin@test.com"),  // Preserve user for next step
-				when: user => user.Name == "Admin")  // Should execute
+				when: user => user.Name == "Admin")  // Should execute, UserDto passes through
 			.ThenInsertAsync(
 				"INSERT INTO Orders (Id, UserId, Amount) VALUES (@Id, @UserId, @Amount)",
 				_ => new { Id = orderId2, UserId = userId, Amount = 200.0 },
-				when: _ => false)  // Should skip
+				when: _ => false)  // Should skip, UserDto passes through
 		, this.TestContext.CancellationToken);
 
 		// Assert
@@ -2168,6 +2231,7 @@ public sealed class SqliteIntegrationTests {
 
 	private record UserDto(string Id, string Name, string Email);
 	private record User(string Id, string Name, string Email);
+	private record UserLight(string Id, string Name);
 	private record OrderDto(string Id, string UserId, double Amount);
 
 	public TestContext TestContext { get; set; }
