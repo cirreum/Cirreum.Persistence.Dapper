@@ -15,6 +15,9 @@
     <File Path="src/Directory.Build.props" />
     <Project Path="src/Cirreum.Persistence.Dapper/Cirreum.Persistence.Dapper.csproj" />
   </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/Cirreum.Persistence.Dapper.Test/Cirreum.Persistence.Dapper.Test.csproj" Id="518cd1d5-4623-49a5-9d38-4d1775cc08c9" />
+  </Folder>
   <Folder Name="/_solution items/">
     <File Path=".editorconfig" />
     <File Path=".gitattributes" />
