@@ -309,7 +309,7 @@ public sealed class DbResultNonGenericTests {
 	public async Task DbResultNonGeneric_ImplicitlyConvertsToTaskOfResult() {
 		// Arrange
 		var successResult = Task.FromResult(Result.Success);
-		var dbResult = new DbResultNonGeneric(default, successResult);
+		var dbResult = new DbResult(default, successResult);
 
 		// Act
 		Task<Result> task = dbResult; // implicit conversion
@@ -323,7 +323,7 @@ public sealed class DbResultNonGenericTests {
 	public async Task DbResultNonGeneric_CanBeAwaitedDirectly() {
 		// Arrange
 		var successResult = Task.FromResult(Result.Success);
-		var dbResult = new DbResultNonGeneric(default, successResult);
+		var dbResult = new DbResult(default, successResult);
 
 		// Act
 		var result = await dbResult; // uses GetAwaiter
@@ -337,7 +337,7 @@ public sealed class DbResultNonGenericTests {
 		// Arrange
 		var error = new BadRequestException("Something went wrong");
 		var failedResult = Task.FromResult(Result.Fail(error));
-		var dbResult = new DbResultNonGeneric(default, failedResult);
+		var dbResult = new DbResult(default, failedResult);
 
 		// Act
 		var result = await dbResult;

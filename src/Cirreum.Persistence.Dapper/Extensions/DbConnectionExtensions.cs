@@ -14,9 +14,11 @@ using System.Data;
 /// Result and PagedResult types. They support asynchronous operations, parameterized queries, and mapping between data
 /// and domain models. Methods are designed to handle not-found cases and pagination scenarios, and to promote
 /// consistent result handling across data access layers.</remarks>
-public static class DapperQueryExtensions {
+public static class DbConnectionExtensions {
 
 	extension(IDbConnection conn) {
+
+		#region GET
 
 		/// <summary>
 		/// Retrieves a single entity by executing the specified SQL query asynchronously and returns the result wrapped in a <see cref="Result{T}"/>
@@ -116,6 +118,174 @@ public static class DapperQueryExtensions {
 			return mapper(result);
 		}
 
+
+		#endregion
+
+		#region GET SCALAR
+
+		/// <summary>
+		/// Executes the specified SQL query asynchronously and returns the first column of the first row
+		/// in the result set, wrapped in a <see cref="Result{T}"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This method is useful for queries that return a single scalar value, such as COUNT, SUM, MAX,
+		/// or selecting a single column value.
+		/// </para>
+		/// <para>
+		/// <strong>SQL Pattern:</strong>
+		/// </para>
+		/// <code>
+		/// SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId
+		/// </code>
+		/// <para>
+		/// <strong>Usage Pattern:</strong>
+		/// </para>
+		/// <code>
+		/// return await conn.GetScalarAsync&lt;int&gt;(
+		///     "SELECT COUNT(*) FROM Orders",
+		///     cancellationToken: cancellationToken);
+		/// </code>
+		/// </remarks>
+		/// <typeparam name="T">The type of the scalar value to return.</typeparam>
+		/// <param name="sql">The SQL query to execute. Should return a single scalar value.</param>
+		/// <param name="transaction">An optional transaction within which the command executes.</param>
+		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
+		/// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="Result{T}"/>
+		/// with the scalar value.</returns>
+		public Task<Result<T>> GetScalarAsync<T>(
+			string sql,
+			IDbTransaction? transaction = null,
+			CancellationToken cancellationToken = default)
+			=> conn.GetScalarAsync<T>(sql, null, transaction, cancellationToken);
+
+		/// <summary>
+		/// Executes the specified SQL query asynchronously and returns the first column of the first row
+		/// in the result set, wrapped in a <see cref="Result{T}"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This method is useful for queries that return a single scalar value, such as COUNT, SUM, MAX,
+		/// or selecting a single column value.
+		/// </para>
+		/// <para>
+		/// <strong>SQL Pattern:</strong>
+		/// </para>
+		/// <code>
+		/// SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId
+		/// </code>
+		/// <para>
+		/// <strong>Usage Pattern:</strong>
+		/// </para>
+		/// <code>
+		/// return await conn.GetScalarAsync&lt;int&gt;(
+		///     "SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId",
+		///     new { query.CustomerId },
+		///     cancellationToken: cancellationToken);
+		/// </code>
+		/// </remarks>
+		/// <typeparam name="T">The type of the scalar value to return.</typeparam>
+		/// <param name="sql">The SQL query to execute. Should return a single scalar value.</param>
+		/// <param name="parameters">An object containing the parameters to be passed to the SQL query, or <see langword="null"/> if no parameters are required.</param>
+		/// <param name="transaction">An optional transaction within which the command executes.</param>
+		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
+		/// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="Result{T}"/>
+		/// with the scalar value.</returns>
+		public async Task<Result<T>> GetScalarAsync<T>(
+			string sql,
+			object? parameters,
+			IDbTransaction? transaction = null,
+			CancellationToken cancellationToken = default) {
+			var result = await conn.ExecuteScalarAsync<T>(new CommandDefinition(
+				sql,
+				parameters,
+				transaction: transaction,
+				cancellationToken: cancellationToken));
+			return Result.From(result!);
+		}
+
+		/// <summary>
+		/// Executes the specified SQL query asynchronously and returns the first column of the first row
+		/// in the result set, applying a mapping function to transform the value, wrapped in a <see cref="Result{T}"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This method is useful for queries that return a single scalar value that needs transformation,
+		/// such as converting database types to domain types.
+		/// </para>
+		/// <para>
+		/// <strong>Usage Pattern:</strong>
+		/// </para>
+		/// <code>
+		/// return await conn.GetScalarAsync&lt;int, OrderCount&gt;(
+		///     "SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId",
+		///     new { query.CustomerId },
+		///     count =&gt; new OrderCount(count),
+		///     cancellationToken: cancellationToken);
+		/// </code>
+		/// </remarks>
+		/// <typeparam name="TData">The type of the scalar value returned by the SQL query (data layer).</typeparam>
+		/// <typeparam name="TModel">The type of the value in the final result (domain layer).</typeparam>
+		/// <param name="sql">The SQL query to execute. Should return a single scalar value.</param>
+		/// <param name="mapper">A function to transform the data value to the domain model.</param>
+		/// <param name="transaction">An optional transaction within which the command executes.</param>
+		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
+		/// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="Result{T}"/>
+		/// with the mapped scalar value.</returns>
+		public Task<Result<TModel>> GetScalarAsync<TData, TModel>(
+			string sql,
+			Func<TData, TModel> mapper,
+			IDbTransaction? transaction = null,
+			CancellationToken cancellationToken = default)
+			=> conn.GetScalarAsync(sql, null, mapper, transaction, cancellationToken);
+
+		/// <summary>
+		/// Executes the specified SQL query asynchronously and returns the first column of the first row
+		/// in the result set, applying a mapping function to transform the value, wrapped in a <see cref="Result{T}"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This method is useful for queries that return a single scalar value that needs transformation,
+		/// such as converting database types to domain types.
+		/// </para>
+		/// <para>
+		/// <strong>Usage Pattern:</strong>
+		/// </para>
+		/// <code>
+		/// return await conn.GetScalarAsync&lt;int, OrderCount&gt;(
+		///     "SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId",
+		///     new { query.CustomerId },
+		///     count =&gt; new OrderCount(count),
+		///     cancellationToken: cancellationToken);
+		/// </code>
+		/// </remarks>
+		/// <typeparam name="TData">The type of the scalar value returned by the SQL query (data layer).</typeparam>
+		/// <typeparam name="TModel">The type of the value in the final result (domain layer).</typeparam>
+		/// <param name="sql">The SQL query to execute. Should return a single scalar value.</param>
+		/// <param name="parameters">An object containing the parameters to be passed to the SQL query, or <see langword="null"/> if no parameters are required.</param>
+		/// <param name="mapper">A function to transform the data value to the domain model.</param>
+		/// <param name="transaction">An optional transaction within which the command executes.</param>
+		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
+		/// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="Result{T}"/>
+		/// with the mapped scalar value.</returns>
+		public async Task<Result<TModel>> GetScalarAsync<TData, TModel>(
+			string sql,
+			object? parameters,
+			Func<TData, TModel> mapper,
+			IDbTransaction? transaction = null,
+			CancellationToken cancellationToken = default) {
+			var result = await conn.ExecuteScalarAsync<TData>(new CommandDefinition(
+				sql,
+				parameters,
+				transaction: transaction,
+				cancellationToken: cancellationToken));
+			return mapper(result!);
+		}
+
+		#endregion
+
+		#region QUERY ANY
+
 		/// <summary>
 		/// Executes the specified SQL query asynchronously and returns zero or more results as a read-only list
 		/// wrapped in a successful Result.
@@ -201,6 +371,10 @@ public static class DapperQueryExtensions {
 				cancellationToken: cancellationToken));
 			return Result.From<IReadOnlyList<TModel>>([.. result.Select(mapper)]);
 		}
+
+		#endregion
+
+		#region QUERY PAGED
 
 		/// <summary>
 		/// Executes the specified SQL query asynchronously and returns the results as a paginated result wrapped in a
@@ -329,6 +503,10 @@ public static class DapperQueryExtensions {
 				page
 			);
 		}
+
+		#endregion
+
+		#region QUERY CURSOR
 
 		/// <summary>
 		/// Executes the specified SQL query asynchronously and returns the results as a cursor-based paginated result
@@ -581,6 +759,9 @@ public static class DapperQueryExtensions {
 			return new CursorResult<TModel>(items, nextCursor, hasNextPage);
 		}
 
+		#endregion
+
+		#region QUERY SLICE
 
 		/// <summary>
 		/// Executes the specified SQL query asynchronously and returns a slice of results with an indicator
@@ -789,166 +970,9 @@ public static class DapperQueryExtensions {
 			return new SliceResult<TModel>(items, hasMore);
 		}
 
+		#endregion
 
-		/// <summary>
-		/// Executes the specified SQL query asynchronously and returns the first column of the first row
-		/// in the result set, wrapped in a <see cref="Result{T}"/>.
-		/// </summary>
-		/// <remarks>
-		/// <para>
-		/// This method is useful for queries that return a single scalar value, such as COUNT, SUM, MAX,
-		/// or selecting a single column value.
-		/// </para>
-		/// <para>
-		/// <strong>SQL Pattern:</strong>
-		/// </para>
-		/// <code>
-		/// SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId
-		/// </code>
-		/// <para>
-		/// <strong>Usage Pattern:</strong>
-		/// </para>
-		/// <code>
-		/// return await conn.GetScalarAsync&lt;int&gt;(
-		///     "SELECT COUNT(*) FROM Orders",
-		///     cancellationToken: cancellationToken);
-		/// </code>
-		/// </remarks>
-		/// <typeparam name="T">The type of the scalar value to return.</typeparam>
-		/// <param name="sql">The SQL query to execute. Should return a single scalar value.</param>
-		/// <param name="transaction">An optional transaction within which the command executes.</param>
-		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
-		/// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="Result{T}"/>
-		/// with the scalar value.</returns>
-		public Task<Result<T>> GetScalarAsync<T>(
-			string sql,
-			IDbTransaction? transaction = null,
-			CancellationToken cancellationToken = default)
-			=> conn.GetScalarAsync<T>(sql, null, transaction, cancellationToken);
-
-		/// <summary>
-		/// Executes the specified SQL query asynchronously and returns the first column of the first row
-		/// in the result set, wrapped in a <see cref="Result{T}"/>.
-		/// </summary>
-		/// <remarks>
-		/// <para>
-		/// This method is useful for queries that return a single scalar value, such as COUNT, SUM, MAX,
-		/// or selecting a single column value.
-		/// </para>
-		/// <para>
-		/// <strong>SQL Pattern:</strong>
-		/// </para>
-		/// <code>
-		/// SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId
-		/// </code>
-		/// <para>
-		/// <strong>Usage Pattern:</strong>
-		/// </para>
-		/// <code>
-		/// return await conn.GetScalarAsync&lt;int&gt;(
-		///     "SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId",
-		///     new { query.CustomerId },
-		///     cancellationToken: cancellationToken);
-		/// </code>
-		/// </remarks>
-		/// <typeparam name="T">The type of the scalar value to return.</typeparam>
-		/// <param name="sql">The SQL query to execute. Should return a single scalar value.</param>
-		/// <param name="parameters">An object containing the parameters to be passed to the SQL query, or <see langword="null"/> if no parameters are required.</param>
-		/// <param name="transaction">An optional transaction within which the command executes.</param>
-		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
-		/// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="Result{T}"/>
-		/// with the scalar value.</returns>
-		public async Task<Result<T>> GetScalarAsync<T>(
-			string sql,
-			object? parameters,
-			IDbTransaction? transaction = null,
-			CancellationToken cancellationToken = default) {
-			var result = await conn.ExecuteScalarAsync<T>(new CommandDefinition(
-				sql,
-				parameters,
-				transaction: transaction,
-				cancellationToken: cancellationToken));
-			return Result.From(result!);
-		}
-
-		/// <summary>
-		/// Executes the specified SQL query asynchronously and returns the first column of the first row
-		/// in the result set, applying a mapping function to transform the value, wrapped in a <see cref="Result{T}"/>.
-		/// </summary>
-		/// <remarks>
-		/// <para>
-		/// This method is useful for queries that return a single scalar value that needs transformation,
-		/// such as converting database types to domain types.
-		/// </para>
-		/// <para>
-		/// <strong>Usage Pattern:</strong>
-		/// </para>
-		/// <code>
-		/// return await conn.GetScalarAsync&lt;int, OrderCount&gt;(
-		///     "SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId",
-		///     new { query.CustomerId },
-		///     count =&gt; new OrderCount(count),
-		///     cancellationToken: cancellationToken);
-		/// </code>
-		/// </remarks>
-		/// <typeparam name="TData">The type of the scalar value returned by the SQL query (data layer).</typeparam>
-		/// <typeparam name="TModel">The type of the value in the final result (domain layer).</typeparam>
-		/// <param name="sql">The SQL query to execute. Should return a single scalar value.</param>
-		/// <param name="mapper">A function to transform the data value to the domain model.</param>
-		/// <param name="transaction">An optional transaction within which the command executes.</param>
-		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
-		/// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="Result{T}"/>
-		/// with the mapped scalar value.</returns>
-		public Task<Result<TModel>> GetScalarAsync<TData, TModel>(
-			string sql,
-			Func<TData, TModel> mapper,
-			IDbTransaction? transaction = null,
-			CancellationToken cancellationToken = default)
-			=> conn.GetScalarAsync(sql, null, mapper, transaction, cancellationToken);
-
-		/// <summary>
-		/// Executes the specified SQL query asynchronously and returns the first column of the first row
-		/// in the result set, applying a mapping function to transform the value, wrapped in a <see cref="Result{T}"/>.
-		/// </summary>
-		/// <remarks>
-		/// <para>
-		/// This method is useful for queries that return a single scalar value that needs transformation,
-		/// such as converting database types to domain types.
-		/// </para>
-		/// <para>
-		/// <strong>Usage Pattern:</strong>
-		/// </para>
-		/// <code>
-		/// return await conn.GetScalarAsync&lt;int, OrderCount&gt;(
-		///     "SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId",
-		///     new { query.CustomerId },
-		///     count =&gt; new OrderCount(count),
-		///     cancellationToken: cancellationToken);
-		/// </code>
-		/// </remarks>
-		/// <typeparam name="TData">The type of the scalar value returned by the SQL query (data layer).</typeparam>
-		/// <typeparam name="TModel">The type of the value in the final result (domain layer).</typeparam>
-		/// <param name="sql">The SQL query to execute. Should return a single scalar value.</param>
-		/// <param name="parameters">An object containing the parameters to be passed to the SQL query, or <see langword="null"/> if no parameters are required.</param>
-		/// <param name="mapper">A function to transform the data value to the domain model.</param>
-		/// <param name="transaction">An optional transaction within which the command executes.</param>
-		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
-		/// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="Result{T}"/>
-		/// with the mapped scalar value.</returns>
-		public async Task<Result<TModel>> GetScalarAsync<TData, TModel>(
-			string sql,
-			object? parameters,
-			Func<TData, TModel> mapper,
-			IDbTransaction? transaction = null,
-			CancellationToken cancellationToken = default) {
-			var result = await conn.ExecuteScalarAsync<TData>(new CommandDefinition(
-				sql,
-				parameters,
-				transaction: transaction,
-				cancellationToken: cancellationToken));
-			return mapper(result!);
-		}
-
+		#region INSERT
 
 		/// <summary>
 		/// Executes an INSERT command and returns a successful result.
@@ -988,7 +1012,7 @@ public static class DapperQueryExtensions {
 		/// or a failure result with an appropriate exception.</returns>
 		public async Task<Result> InsertAsync(
 			string sql,
-			object? parameters,
+			object? parameters = null,
 			string uniqueConstraintMessage = "Record already exists",
 			string? foreignKeyMessage = "Referenced record does not exist",
 			IDbTransaction? transaction = null,
@@ -1073,6 +1097,11 @@ public static class DapperQueryExtensions {
 				return Result.BadRequest<T>(foreignKeyMessage);
 			}
 		}
+
+
+		#endregion
+
+		#region UPDATE
 
 		/// <summary>
 		/// Executes an UPDATE command and returns a successful result if at least one row was affected.
@@ -1210,6 +1239,10 @@ public static class DapperQueryExtensions {
 			}
 		}
 
+		#endregion
+
+		#region DELETE
+
 		/// <summary>
 		/// Executes a DELETE command and returns a successful result if at least one row was affected.
 		/// </summary>
@@ -1269,6 +1302,9 @@ public static class DapperQueryExtensions {
 			}
 		}
 
+		#endregion
+
+		#region EXECUTE TRANSACTION
 
 		/// <summary>
 		/// Executes an operation within a database transaction, automatically committing on success
@@ -1283,25 +1319,25 @@ public static class DapperQueryExtensions {
 		/// <strong>Usage Pattern:</strong>
 		/// </para>
 		/// <code>
-		/// return await conn.ExecuteInTransactionAsync(db =&gt;
-		///     db.InsertAsync(sql1, param1)
-		///       .ThenInsertAsync(db, sql2, param2)
-		///       .ThenUpdateAsync(db, sql3, param3, key)
+		/// return await conn.ExecuteInTransactionAsync(ctx =&gt; ctx
+		///     .InsertAsync(sql1, param1)
+		///     .ThenInsertAsync(db, sql2, param2)
+		///     .ThenUpdateAsync(db, sql3, param3, key)
 		/// , cancellationToken);
 		/// </code>
 		/// </remarks>
-		/// <param name="action">A function that receives a <see cref="TransactionBuilder"/> and returns a <see cref="Result"/>.</param>
+		/// <param name="action">A function that receives a <see cref="TransactionContext"/> and returns a <see cref="Result"/>.</param>
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>The result of the operation. The transaction is committed on success, rolled back on failure.</returns>
 		public async Task<Result> ExecuteInTransactionAsync(
-			Func<TransactionBuilder, Task<Result>> action,
+			Func<TransactionContext, Task<Result>> action,
 			CancellationToken cancellationToken = default) {
 
 			using var transaction = conn.BeginTransaction();
-			var builder = new TransactionBuilder(conn, transaction, cancellationToken);
+			var transactionContext = new TransactionContext(conn, transaction, cancellationToken);
 
 			try {
-				var result = await action(builder).ConfigureAwait(false);
+				var result = await action(transactionContext).ConfigureAwait(false);
 
 				if (result.IsSuccess) {
 					transaction.Commit();
@@ -1342,18 +1378,18 @@ public static class DapperQueryExtensions {
 		/// </code>
 		/// </remarks>
 		/// <typeparam name="T">The type of the value returned on success.</typeparam>
-		/// <param name="action">A function that receives a <see cref="TransactionBuilder"/> and returns a <see cref="Result{T}"/>.</param>
+		/// <param name="action">A function that receives a <see cref="TransactionContext"/> and returns a <see cref="Result{T}"/>.</param>
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>The result of the operation. The transaction is committed on success, rolled back on failure.</returns>
 		public async Task<Result<T>> ExecuteInTransactionAsync<T>(
-			Func<TransactionBuilder, Task<Result<T>>> action,
+			Func<TransactionContext, Task<Result<T>>> action,
 			CancellationToken cancellationToken = default) {
 
 			using var transaction = conn.BeginTransaction();
-			var builder = new TransactionBuilder(conn, transaction, cancellationToken);
+			var transactionContext = new TransactionContext(conn, transaction, cancellationToken);
 
 			try {
-				var result = await action(builder).ConfigureAwait(false);
+				var result = await action(transactionContext).ConfigureAwait(false);
 
 				if (result.IsSuccess) {
 					transaction.Commit();
@@ -1370,6 +1406,8 @@ public static class DapperQueryExtensions {
 				return Result.Fail<T>(ex);
 			}
 		}
+
+		#endregion
 
 	}
 
