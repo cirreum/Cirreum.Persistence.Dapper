@@ -170,18 +170,35 @@ Insert, Update, and Delete extensions automatically handle SQL constraint violat
 
 ### Insert
 ```csharp
-public async Task<Result<Guid>> CreateOrderAsync(CreateOrder command, CancellationToken ct)
+// Simple insert - returns Result (success/failure only)
+public async Task<Result> CreateOrderAsync(CreateOrder command, CancellationToken ct)
 {
     await using var conn = await db.CreateConnectionAsync(ct);
-    var orderId = Guid.CreateVersion7();
 
     return await conn.InsertAsync(
         """
         INSERT INTO Orders (OrderId, CustomerId, Amount, CreatedAt)
         VALUES (@OrderId, @CustomerId, @Amount, @CreatedAt)
         """,
+        new { command.OrderId, command.CustomerId, command.Amount, CreatedAt = DateTime.UtcNow },
+        uniqueConstraintMessage: "Order already exists",
+        foreignKeyMessage: "Customer not found",
+        ct);
+}
+
+// Insert with return value - returns Result<T> with the generated ID
+public async Task<Result<Guid>> CreateOrderAsync(CreateOrder command, CancellationToken ct)
+{
+    await using var conn = await db.CreateConnectionAsync(ct);
+    var orderId = Guid.CreateVersion7();
+
+    return await conn.InsertAndReturnAsync(
+        """
+        INSERT INTO Orders (OrderId, CustomerId, Amount, CreatedAt)
+        VALUES (@OrderId, @CustomerId, @Amount, @CreatedAt)
+        """,
         new { OrderId = orderId, command.CustomerId, command.Amount, CreatedAt = DateTime.UtcNow },
-        () => orderId,
+        () => orderId,  // Return the generated ID on success
         uniqueConstraintMessage: "Order already exists",
         foreignKeyMessage: "Customer not found",
         ct);
@@ -190,6 +207,7 @@ public async Task<Result<Guid>> CreateOrderAsync(CreateOrder command, Cancellati
 
 ### Update
 ```csharp
+// Simple update - returns Result (success/failure only)
 public async Task<Result> UpdateOrderAsync(UpdateOrder command, CancellationToken ct)
 {
     await using var conn = await db.CreateConnectionAsync(ct);
@@ -198,6 +216,21 @@ public async Task<Result> UpdateOrderAsync(UpdateOrder command, CancellationToke
         "UPDATE Orders SET Amount = @Amount WHERE OrderId = @OrderId",
         new { command.OrderId, command.Amount },
         key: command.OrderId,  // Returns NotFound if 0 rows affected
+        uniqueConstraintMessage: "Order reference already exists",
+        foreignKeyMessage: "Customer not found",
+        ct);
+}
+
+// Update with return value - returns Result<T>
+public async Task<Result<Guid>> UpdateOrderAsync(UpdateOrder command, CancellationToken ct)
+{
+    await using var conn = await db.CreateConnectionAsync(ct);
+
+    return await conn.UpdateAndReturnAsync(
+        "UPDATE Orders SET Amount = @Amount WHERE OrderId = @OrderId",
+        new { command.OrderId, command.Amount },
+        key: command.OrderId,
+        () => command.OrderId,  // Return the ID on success
         uniqueConstraintMessage: "Order reference already exists",
         foreignKeyMessage: "Customer not found",
         ct);

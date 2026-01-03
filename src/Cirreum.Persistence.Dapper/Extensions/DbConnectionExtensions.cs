@@ -1055,7 +1055,7 @@ public static class DbConnectionExtensions {
 		/// <code>
 		/// var orderId = Guid.CreateVersion7();
 		///
-		/// return await conn.InsertAsync(
+		/// return await conn.InsertAndReturnAsync(
 		///     "INSERT INTO Orders (OrderId, CustomerId, Amount) VALUES (@OrderId, @CustomerId, @Amount)",
 		///     new { OrderId = orderId, command.CustomerId, command.Amount },
 		///     () =&gt; orderId,
@@ -1074,7 +1074,7 @@ public static class DbConnectionExtensions {
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="Result{T}"/>
 		/// with the value from <paramref name="resultSelector"/> on success, or a failure result with an appropriate exception.</returns>
-		public async Task<Result<T>> InsertAsync<T>(
+		public async Task<Result<T>> InsertAndReturnAsync<T>(
 			string sql,
 			object? parameters,
 			Func<T> resultSelector,
@@ -1097,7 +1097,6 @@ public static class DbConnectionExtensions {
 				return Result.BadRequest<T>(foreignKeyMessage);
 			}
 		}
-
 
 		#endregion
 
@@ -1191,7 +1190,7 @@ public static class DbConnectionExtensions {
 		/// <strong>Usage Pattern:</strong>
 		/// </para>
 		/// <code>
-		/// return await conn.UpdateAsync(
+		/// return await conn.UpdateAndReturnAsync(
 		///     "UPDATE Orders SET Amount = @Amount WHERE OrderId = @OrderId",
 		///     new { command.OrderId, command.Amount },
 		///     key: command.OrderId,
@@ -1212,7 +1211,7 @@ public static class DbConnectionExtensions {
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="Result{T}"/>
 		/// with the value from <paramref name="resultSelector"/> if at least one row was updated, or a failure result with an appropriate exception.</returns>
-		public async Task<Result<T>> UpdateAsync<T>(
+		public async Task<Result<T>> UpdateAndReturnAsync<T>(
 			string sql,
 			object? parameters,
 			object key,

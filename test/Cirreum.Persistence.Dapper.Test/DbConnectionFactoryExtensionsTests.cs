@@ -470,7 +470,7 @@ public sealed class DbConnectionFactoryExtensionsTests {
 		var userId = Guid.NewGuid().ToString();
 
 		// Act
-		var result = await this._factory.InsertAsync(
+		var result = await this._factory.InsertAndReturnAsync(
 			"INSERT INTO Users (Id, Name, Email) VALUES (@Id, @Name, @Email)",
 			new { Id = userId, Name = "John", Email = "john@test.com" },
 			() => userId,
@@ -529,7 +529,7 @@ public sealed class DbConnectionFactoryExtensionsTests {
 			cancellationToken: this.TestContext.CancellationToken);
 
 		// Act
-		var result = await this._factory.UpdateAsync(
+		var result = await this._factory.UpdateAndReturnAsync(
 			"UPDATE Users SET Name = @Name WHERE Id = @Id",
 			new { Id = userId, Name = "Jane" },
 			userId,

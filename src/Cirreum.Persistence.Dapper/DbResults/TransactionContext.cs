@@ -84,7 +84,7 @@ public readonly struct TransactionContext(
 		Func<T> resultSelector,
 		string uniqueConstraintMessage = "Record already exists",
 		string? foreignKeyMessage = "Referenced record does not exist")
-		=> new(this, connection.InsertAsync(sql, null, resultSelector, uniqueConstraintMessage, foreignKeyMessage, transaction, cancellationToken));
+		=> new(this, connection.InsertAndReturnAsync(sql, null, resultSelector, uniqueConstraintMessage, foreignKeyMessage, transaction, cancellationToken));
 
 	/// <summary>
 	/// Executes an INSERT command and returns the specified value on success.
@@ -102,7 +102,7 @@ public readonly struct TransactionContext(
 		Func<T> resultSelector,
 		string uniqueConstraintMessage = "Record already exists",
 		string? foreignKeyMessage = "Referenced record does not exist")
-		=> new(this, connection.InsertAsync(sql, parameters, resultSelector, uniqueConstraintMessage, foreignKeyMessage, transaction, cancellationToken));
+		=> new(this, connection.InsertAndReturnAsync(sql, parameters, resultSelector, uniqueConstraintMessage, foreignKeyMessage, transaction, cancellationToken));
 
 	/// <summary>
 	/// Conditionally executes an INSERT command and returns a chainable result.
@@ -118,7 +118,7 @@ public readonly struct TransactionContext(
 		Func<bool> when,
 		string uniqueConstraintMessage = "Record already exists",
 		string? foreignKeyMessage = "Referenced record does not exist")
-		=> new(this, InsertIfAsyncCore(sql, null, when, uniqueConstraintMessage, foreignKeyMessage));
+		=> new(this, this.InsertIfAsyncCore(sql, null, when, uniqueConstraintMessage, foreignKeyMessage));
 
 	/// <summary>
 	/// Conditionally executes an INSERT command and returns a chainable result.
@@ -136,7 +136,7 @@ public readonly struct TransactionContext(
 		Func<bool> when,
 		string uniqueConstraintMessage = "Record already exists",
 		string? foreignKeyMessage = "Referenced record does not exist")
-		=> new(this, InsertIfAsyncCore(sql, parameters, when, uniqueConstraintMessage, foreignKeyMessage));
+		=> new(this, this.InsertIfAsyncCore(sql, parameters, when, uniqueConstraintMessage, foreignKeyMessage));
 
 	/// <summary>
 	/// Conditionally executes an INSERT command and returns the specified value on success.
@@ -155,7 +155,7 @@ public readonly struct TransactionContext(
 		Func<bool> when,
 		string uniqueConstraintMessage = "Record already exists",
 		string? foreignKeyMessage = "Referenced record does not exist")
-		=> new(this, InsertIfAndReturnAsyncCore(sql, null, resultSelector, when, uniqueConstraintMessage, foreignKeyMessage));
+		=> new(this, this.InsertIfAndReturnAsyncCore(sql, null, resultSelector, when, uniqueConstraintMessage, foreignKeyMessage));
 
 	/// <summary>
 	/// Conditionally executes an INSERT command and returns the specified value on success.
@@ -176,7 +176,7 @@ public readonly struct TransactionContext(
 		Func<bool> when,
 		string uniqueConstraintMessage = "Record already exists",
 		string? foreignKeyMessage = "Referenced record does not exist")
-		=> new(this, InsertIfAndReturnAsyncCore(sql, parameters, resultSelector, when, uniqueConstraintMessage, foreignKeyMessage));
+		=> new(this, this.InsertIfAndReturnAsyncCore(sql, parameters, resultSelector, when, uniqueConstraintMessage, foreignKeyMessage));
 
 	private async Task<Result> InsertIfAsyncCore(
 		string sql,
@@ -200,7 +200,7 @@ public readonly struct TransactionContext(
 		if (!when()) {
 			return resultSelector();
 		}
-		return await connection.InsertAsync(sql, parameters, resultSelector, uniqueConstraintMessage, foreignKeyMessage, transaction, cancellationToken).ConfigureAwait(false);
+		return await connection.InsertAndReturnAsync(sql, parameters, resultSelector, uniqueConstraintMessage, foreignKeyMessage, transaction, cancellationToken).ConfigureAwait(false);
 	}
 
 	#endregion
@@ -242,7 +242,7 @@ public readonly struct TransactionContext(
 		Func<T> resultSelector,
 		string uniqueConstraintMessage = "Record already exists",
 		string? foreignKeyMessage = "Referenced record does not exist")
-		=> new(this, connection.UpdateAsync(sql, parameters, key, resultSelector, uniqueConstraintMessage, foreignKeyMessage, transaction, cancellationToken));
+		=> new(this, connection.UpdateAndReturnAsync(sql, parameters, key, resultSelector, uniqueConstraintMessage, foreignKeyMessage, transaction, cancellationToken));
 
 	/// <summary>
 	/// Conditionally executes an UPDATE command and returns a chainable result.
@@ -262,7 +262,7 @@ public readonly struct TransactionContext(
 		Func<bool> when,
 		string uniqueConstraintMessage = "Record already exists",
 		string? foreignKeyMessage = "Referenced record does not exist")
-		=> new(this, UpdateIfAsyncCore(sql, parameters, key, when, uniqueConstraintMessage, foreignKeyMessage));
+		=> new(this, this.UpdateIfAsyncCore(sql, parameters, key, when, uniqueConstraintMessage, foreignKeyMessage));
 
 	/// <summary>
 	/// Conditionally executes an UPDATE command and returns the specified value on success.
@@ -285,7 +285,7 @@ public readonly struct TransactionContext(
 		Func<bool> when,
 		string uniqueConstraintMessage = "Record already exists",
 		string? foreignKeyMessage = "Referenced record does not exist")
-		=> new(this, UpdateIfAndReturnAsyncCore(sql, parameters, key, resultSelector, when, uniqueConstraintMessage, foreignKeyMessage));
+		=> new(this, this.UpdateIfAndReturnAsyncCore(sql, parameters, key, resultSelector, when, uniqueConstraintMessage, foreignKeyMessage));
 
 	private async Task<Result> UpdateIfAsyncCore(
 		string sql,
@@ -311,7 +311,7 @@ public readonly struct TransactionContext(
 		if (!when()) {
 			return resultSelector();
 		}
-		return await connection.UpdateAsync(sql, parameters, key, resultSelector, uniqueConstraintMessage, foreignKeyMessage, transaction, cancellationToken).ConfigureAwait(false);
+		return await connection.UpdateAndReturnAsync(sql, parameters, key, resultSelector, uniqueConstraintMessage, foreignKeyMessage, transaction, cancellationToken).ConfigureAwait(false);
 	}
 
 	#endregion
@@ -349,7 +349,7 @@ public readonly struct TransactionContext(
 		object key,
 		Func<bool> when,
 		string foreignKeyMessage = "Cannot delete, record is in use")
-		=> new(this, DeleteIfAsyncCore(sql, parameters, key, when, foreignKeyMessage));
+		=> new(this, this.DeleteIfAsyncCore(sql, parameters, key, when, foreignKeyMessage));
 
 	private async Task<Result> DeleteIfAsyncCore(
 		string sql,

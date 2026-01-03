@@ -1108,7 +1108,7 @@ public static class DbConnectionFactoryExtensions {
 		/// <code>
 		/// var orderId = Guid.CreateVersion7();
 		///
-		/// return await factory.InsertAsync(
+		/// return await factory.InsertAndReturnAsync(
 		///     "INSERT INTO Orders (OrderId, CustomerId, Amount) VALUES (@OrderId, @CustomerId, @Amount)",
 		///     new { OrderId = orderId, command.CustomerId, command.Amount },
 		///     () =&gt; orderId,
@@ -1126,7 +1126,7 @@ public static class DbConnectionFactoryExtensions {
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="Result{T}"/>
 		/// with the value from <paramref name="resultSelector"/> on success, or a failure result with an appropriate exception.</returns>
-		public async Task<Result<T>> InsertAsync<T>(
+		public async Task<Result<T>> InsertAndReturnAsync<T>(
 			string sql,
 			object? parameters,
 			Func<T> resultSelector,
@@ -1134,7 +1134,7 @@ public static class DbConnectionFactoryExtensions {
 			string? foreignKeyMessage = "Referenced record does not exist",
 			CancellationToken cancellationToken = default) {
 			await using var connection = await factory.CreateConnectionAsync(cancellationToken);
-			return await connection.InsertAsync(
+			return await connection.InsertAndReturnAsync(
 				sql,
 				parameters,
 				resultSelector,
@@ -1143,7 +1143,6 @@ public static class DbConnectionFactoryExtensions {
 				transaction: null,
 				cancellationToken: cancellationToken);
 		}
-
 
 		#endregion
 
@@ -1228,7 +1227,7 @@ public static class DbConnectionFactoryExtensions {
 		/// <strong>Usage Pattern:</strong>
 		/// </para>
 		/// <code>
-		/// return await factory.UpdateAsync(
+		/// return await factory.UpdateAndReturnAsync(
 		///     "UPDATE Orders SET Amount = @Amount WHERE OrderId = @OrderId",
 		///     new { command.OrderId, command.Amount },
 		///     key: command.OrderId,
@@ -1248,7 +1247,7 @@ public static class DbConnectionFactoryExtensions {
 		/// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
 		/// <returns>A task that represents the asynchronous operation. The task result contains a <see cref="Result{T}"/>
 		/// with the value from <paramref name="resultSelector"/> if at least one row was updated, or a failure result with an appropriate exception.</returns>
-		public async Task<Result<T>> UpdateAsync<T>(
+		public async Task<Result<T>> UpdateAndReturnAsync<T>(
 			string sql,
 			object? parameters,
 			object key,
@@ -1257,7 +1256,7 @@ public static class DbConnectionFactoryExtensions {
 			string? foreignKeyMessage = "Referenced record does not exist",
 			CancellationToken cancellationToken = default) {
 			await using var connection = await factory.CreateConnectionAsync(cancellationToken);
-			return await connection.UpdateAsync(
+			return await connection.UpdateAndReturnAsync(
 				sql,
 				parameters,
 				key,
